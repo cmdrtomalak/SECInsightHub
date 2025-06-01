@@ -68,10 +68,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       }
     };
 
-    if (contextMenu && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('click', handleClickOutside);
       return () => {
-        if (contextMenu && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
           document.removeEventListener('click', handleClickOutside);
         }
       };

@@ -80,13 +80,17 @@ export function setupTextSelection(
   // Add event listeners
   container.addEventListener('mouseup', handleMouseUp);
   container.addEventListener('mousedown', handleMouseDown);
-  document.addEventListener('keydown', handleKeyDown);
+  if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('keydown', handleKeyDown);
+  }
 
   // Return cleanup function
   return () => {
     container.removeEventListener('mouseup', handleMouseUp);
     container.removeEventListener('mousedown', handleMouseDown);
-    document.removeEventListener('keydown', handleKeyDown);
+    if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('keydown', handleKeyDown);
+    }
   };
 }
 
