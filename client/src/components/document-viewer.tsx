@@ -68,9 +68,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       }
     };
 
-    if (contextMenu) {
+    if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      return () => {
+        if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+          document.removeEventListener('click', handleClickOutside);
+        }
+      };
     }
   }, [contextMenu]);
 
@@ -293,7 +297,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
               }}
             >
               <Highlighter className="h-4 w-4" />
-              <span>Add Highlight</span>
+              <span>Annotate</span>
             </button>
             <button
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
