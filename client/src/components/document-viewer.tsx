@@ -185,6 +185,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   const highlightText = (content: string) => {
     let highlightedContent = content;
+    console.log('DocumentViewer highlightText - Annotations:', JSON.stringify(annotations));
     // Sort annotations by start offset to process them in order
     const sortedAnnotations = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
     
@@ -195,10 +196,14 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       const highlighted = highlightedContent.substring(annotation.startOffset, annotation.endOffset);
       const after = highlightedContent.substring(annotation.endOffset);
       
-      const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
+      let spanClass = "annotation-highlight";
+      if (annotation.type === 'highlight') {
+        const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
+        spanClass += ` ${bgColorClass}`;
+      }
       const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
       
-      highlightedContent = `${before}<span class="annotation-highlight ${bgColorClass}" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}">${highlighted}${annotationMarker}</span>${after}`;
+      highlightedContent = `${before}<span class="${spanClass}" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}">${highlighted}${annotationMarker}</span>${after}`;
     }
     
     return highlightedContent;
