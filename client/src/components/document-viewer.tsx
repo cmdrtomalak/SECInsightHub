@@ -168,39 +168,23 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     );
   }
 
-  const getHighlightClass = (color: string) => {
+  const getHighlightBackgroundColorClass = (color: string): string => {
     switch (color) {
       case 'orange':
-        return 'bg-orange-200 hover:bg-orange-300';
+        return 'highlight-bg-orange';
       case 'green':
-        return 'bg-green-200 hover:bg-green-300';
+        return 'highlight-bg-green';
       case 'pink':
-        return 'bg-pink-200 hover:bg-pink-300';
+        return 'highlight-bg-pink';
       case 'blue':
-        return 'bg-blue-200 hover:bg-blue-300';
+        return 'highlight-bg-blue';
       default:
-        return 'bg-orange-200 hover:bg-orange-300';
-    }
-  };
-
-  const getHighlightBackgroundColor = (color: string) => {
-    switch (color) {
-      case 'orange':
-        return '#fed7aa';
-      case 'green':
-        return '#bbf7d0';
-      case 'pink':
-        return '#fce7f3';
-      case 'blue':
-        return '#dbeafe';
-      default:
-        return '#fed7aa';
+        return 'highlight-bg-default'; // Default to orange-like highlight
     }
   };
 
   const highlightText = (content: string) => {
     let highlightedContent = content;
-    
     // Sort annotations by start offset to process them in order
     const sortedAnnotations = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
     
@@ -211,10 +195,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       const highlighted = highlightedContent.substring(annotation.startOffset, annotation.endOffset);
       const after = highlightedContent.substring(annotation.endOffset);
       
-      const colorClass = getHighlightClass(annotation.color);
+      const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
       const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
       
-      highlightedContent = `${before}<span class="annotation-highlight" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}" style="background-color: ${getHighlightBackgroundColor(annotation.color)}; padding: 1px 2px; border-radius: 2px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">${highlighted}${annotationMarker}</span>${after}`;
+      highlightedContent = `${before}<span class="annotation-highlight ${bgColorClass}" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}">${highlighted}${annotationMarker}</span>${after}`;
     }
     
     return highlightedContent;
