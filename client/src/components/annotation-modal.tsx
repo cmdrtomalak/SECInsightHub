@@ -187,9 +187,6 @@ export default function AnnotationModal({
               value={note}
               onChange={(e) => {
                 setNote(e.target.value);
-                if (e.target.value.trim() !== "" && annotationType !== "note") {
-                  setAnnotationType("note");
-                }
               }}
             />
           </div>

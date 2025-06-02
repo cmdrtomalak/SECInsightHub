@@ -247,23 +247,18 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           if (annotation.note) {
             spanElement.setAttribute('title', annotation.note);
           }
-          const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
-          if (annotationMarker) {
-            // Add marker without breaking surroundContents
-             const markerNode = document.createTextNode(annotationMarker);
-             spanElement.appendChild(markerNode); // Add marker inside the span initially
-          }
 
-          range.surroundContents(spanElement);
+          // Ensure spanElement does not contain the marker text before surroundContents.
+          range.surroundContents(spanElement); // Moves the original document content into the span.
 
-          // If marker was added, move it after the span
-          if (annotationMarker && spanElement.parentNode) {
-            const markerTextNode = document.createTextNode(annotationMarker);
-            spanElement.parentNode.insertBefore(markerTextNode, spanElement.nextSibling);
-            // Remove marker from inside the span
-            if (spanElement.lastChild && spanElement.lastChild.nodeValue === annotationMarker) {
-                spanElement.removeChild(spanElement.lastChild);
-            }
+          // Add marker text AFTER the span if it's a 'note' type annotation
+          // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
+          const annotationMarkerText = annotation.type === 'note' ? ' 📝' : '';
+          if (annotationMarkerText && spanElement.parentNode) {
+            const markerNode = document.createTextNode(annotationMarkerText);
+            // Insert the marker text node immediately after the spanElement.
+            // If spanElement.nextSibling is null, it will be appended at the end of parentNode's children, which is fine.
+            spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
           }
 
         } catch (e) {
