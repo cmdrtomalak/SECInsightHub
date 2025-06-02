@@ -44,6 +44,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     enabled: !!documentId,
   });
 
+  console.log(
+    "DocumentViewer: Rendering. documentId:", documentId, 
+    "Annotations count:", annotations.length, 
+    "Last annotation:", annotations.length > 0 ? JSON.stringify(annotations[annotations.length - 1]) : "N/A",
+    "Document content snippet (first 100):", document?.content?.substring(0,100) ?? "N/A"
+  );
+
   useEffect(() => {
     if (contentRef.current) {
       const cleanup = setupTextSelection(contentRef.current, (text: string, startOffset: number, endOffset: number, event: MouseEvent) => {
