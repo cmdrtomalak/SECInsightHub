@@ -225,7 +225,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         if (endNode === null && currentOffset + nodeLength >= annotation.endOffset) {
           endNode = currentNode as Text;
           endNodeOffset = annotation.endOffset - currentOffset;
-          break; 
+          break;
         }
         currentOffset += nodeLength;
       }
@@ -247,11 +247,11 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           if (annotation.note) {
             spanElement.setAttribute('title', annotation.note);
           }
-          
+
           // Ensure spanElement does not contain the marker text before surroundContents.
           range.surroundContents(spanElement); // Moves the original document content into the span.
-          
-          // Add marker text AFTER the span if it's a 'note' type annotation 
+
+          // Add marker text AFTER the span if it's a 'note' type annotation
           // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
           const annotationMarkerText = annotation.type === 'note' ? ' 📝' : '';
           if (annotationMarkerText && spanElement.parentNode) {

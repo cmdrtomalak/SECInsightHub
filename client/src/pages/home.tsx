@@ -84,21 +84,23 @@ export default function Home() {
 
       // Fetch document content
       const documentUrl = `https://www.sec.gov/Archives/edgar/data/0000320193/${latest10K.accessionNumber.replace(/-/g, '')}/${latest10K.primaryDocument}`;
-      const contentResponse = await fetch(`/api/sec/document?url=${encodeURIComponent(documentUrl)}`);
-      let contentHtml = "<p>(Content retrieval failed or was empty)</p>"; // Default HTML placeholder
+      // const contentResponse = await fetch(`/api/sec/document?url=${encodeURIComponent(documentUrl)}`);
+      // let contentHtml = "<p>(Content retrieval failed or was empty)</p>"; // Default HTML placeholder
       
-      if (contentResponse.ok) {
-        try {
-          const contentData = await contentResponse.json();
-          // Ensure contentData.content is a non-empty string, otherwise use the placeholder
-          if (contentData && typeof contentData.content === 'string' && contentData.content.trim() !== '') {
-            contentHtml = contentData.content;
-          }
-        } catch (e) {
-          // Error parsing JSON, or other issue, stick with default placeholder
-          console.error("Error processing contentResponse JSON:", e);
-        }
-      }
+      // if (contentResponse.ok) {
+      //   try {
+      //     const contentData = await contentResponse.json();
+      //     // Ensure contentData.content is a non-empty string, otherwise use the placeholder
+      //     if (contentData && typeof contentData.content === 'string' && contentData.content.trim() !== '') {
+      //       contentHtml = contentData.content;
+      //     }
+      //   } catch (e) {
+      //     // Error parsing JSON, or other issue, stick with default placeholder
+      //     console.error("Error processing contentResponse JSON:", e);
+      //   }
+      // }
+      // Temporarily override contentHtml for diagnostic purposes:
+      let contentHtml = "<p>Test content.</p>";
 
       // Create document
       const documentData = {
