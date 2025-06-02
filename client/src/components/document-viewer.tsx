@@ -184,31 +184,92 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   };
 
   const highlightText = (content: string) => {
-    let highlightedContent = content;
-    console.log("DocumentViewer highlightText - Initial content length:", content.length);
-    console.log("DocumentViewer highlightText - Initial content snippet (first 1000 chars):", content.substring(0, 1000));
-    // Sort annotations by start offset to process them in order
-    const sortedAnnotations = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
-    
-    // Apply highlights in reverse order to maintain offset positions
-    for (let i = sortedAnnotations.length - 1; i >= 0; i--) {
-      const annotation = sortedAnnotations[i];
-
-      const before = highlightedContent.substring(0, annotation.startOffset);
-      const highlighted = highlightedContent.substring(annotation.startOffset, annotation.endOffset);
-      const after = highlightedContent.substring(annotation.endOffset);
-      
-      let spanClass = "annotation-highlight";
-      if (annotation.type === 'highlight') {
-        const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
-        spanClass += ` ${bgColorClass}`;
-      }
-      const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
-      
-      highlightedContent = `${before}<span class="${spanClass}" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}">${highlighted}${annotationMarker}</span>${after}`;
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return content; // Return original content if not in a browser environment
     }
-    
-    return highlightedContent;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Sort annotations by start offset in descending order
+    const sortedAnnotations = [...annotations].sort((a, b) => b.startOffset - a.startOffset);
+
+    for (const annotation of sortedAnnotations) {
+      const walker = document.createTreeWalker(
+        tempDiv,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+
+      let currentOffset = 0;
+      let startNode: Text | null = null;
+      let endNode: Text | null = null;
+      let startNodeOffset = 0;
+      let endNodeOffset = 0;
+
+      let currentNode;
+      while (currentNode = walker.nextNode()) {
+        const nodeText = currentNode.textContent || "";
+        const nodeLength = nodeText.length;
+
+        if (startNode === null && currentOffset + nodeLength > annotation.startOffset) {
+          startNode = currentNode as Text;
+          startNodeOffset = annotation.startOffset - currentOffset;
+        }
+
+        if (endNode === null && currentOffset + nodeLength >= annotation.endOffset) {
+          endNode = currentNode as Text;
+          endNodeOffset = annotation.endOffset - currentOffset;
+          break;
+        }
+        currentOffset += nodeLength;
+      }
+
+      if (startNode && endNode) {
+        const range = document.createRange();
+        try {
+          range.setStart(startNode, startNodeOffset);
+          range.setEnd(endNode, endNodeOffset);
+
+          const spanElement = document.createElement('span');
+          spanElement.className = "annotation-highlight";
+          if (annotation.type === 'highlight') {
+            const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
+            spanElement.classList.add(bgColorClass);
+          }
+          spanElement.setAttribute('data-annotation-id', annotation.id.toString());
+          spanElement.setAttribute('data-annotation-start', annotation.startOffset.toString());
+          if (annotation.note) {
+            spanElement.setAttribute('title', annotation.note);
+          }
+          const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
+          if (annotationMarker) {
+            // Add marker without breaking surroundContents
+             const markerNode = document.createTextNode(annotationMarker);
+             spanElement.appendChild(markerNode); // Add marker inside the span initially
+          }
+
+          range.surroundContents(spanElement);
+
+          // If marker was added, move it after the span
+          if (annotationMarker && spanElement.parentNode) {
+            const markerTextNode = document.createTextNode(annotationMarker);
+            spanElement.parentNode.insertBefore(markerTextNode, spanElement.nextSibling);
+            // Remove marker from inside the span
+            if (spanElement.lastChild && spanElement.lastChild.nodeValue === annotationMarker) {
+                spanElement.removeChild(spanElement.lastChild);
+            }
+          }
+
+        } catch (e) {
+          console.error("Error surrounding contents for annotation:", annotation.id, e);
+          // Fallback or error handling if needed
+        }
+      } else {
+        console.warn("Could not find nodes for annotation:", annotation.id, "Start:", annotation.startOffset, "End:", annotation.endOffset);
+      }
+    }
+    return tempDiv.innerHTML;
   };
 
   return (
