@@ -110,7 +110,7 @@ export default function Home() {
         documentUrl: documentUrl,
         title: `Apple Inc. ${latest10K.form} - ${latest10K.filingDate}`,
         content: contentHtml, // Use the new variable
-        totalPages: 1,
+        totalPages: null, // Changed to null
       };
 
       console.log("Submitting documentData to /api/documents:", JSON.stringify(documentData, null, 2));
