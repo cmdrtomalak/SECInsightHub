@@ -137,7 +137,7 @@ export default function Home() {
 
   // Auto-load Apple 10-K if no documents exist and not already initialized
   useEffect(() => {
-    if (!hasInitialized && recentDocuments.length === 0 && !currentDocumentId && !params.id) {
+    if (false && !hasInitialized && recentDocuments.length === 0 && !currentDocumentId && !params.id) { // Added 'false &&'
       setHasInitialized(true);
       createAppleDocumentMutation.mutate();
     }
