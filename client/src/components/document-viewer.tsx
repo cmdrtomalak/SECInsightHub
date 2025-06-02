@@ -193,9 +193,9 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   const highlightText = (content: string) => {
     if (
       typeof document === 'undefined' ||
-      typeof document.createElement === 'undefined' ||
-      typeof document.createTreeWalker === 'undefined' ||
-      typeof document.createRange === 'undefined'
+      typeof document.createElement !== 'function' ||
+      typeof document.createTreeWalker !== 'function' ||
+      typeof document.createRange !== 'function'
     ) {
       console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof document:", typeof document);
       return content; 
