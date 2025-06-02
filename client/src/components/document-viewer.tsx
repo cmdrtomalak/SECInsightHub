@@ -197,7 +197,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       typeof document.createTreeWalker === 'undefined' ||
       typeof document.createRange === 'undefined'
     ) {
-      return content; // Return original content if not in a browser environment or document is missing methods
+      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof document:", typeof document);
+      return content; 
+    } else {
+      console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic.");
     }
     console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
 
