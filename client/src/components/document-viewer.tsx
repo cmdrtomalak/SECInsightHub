@@ -192,83 +192,105 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     ) {
       return content; // Return original content if not in a browser environment or document is missing methods
     }
+    console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
 
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
 
     // Sort annotations by start offset in descending order
     const sortedAnnotations = [...annotations].sort((a, b) => b.startOffset - a.startOffset);
+    console.log("highlightText: Processing annotations:", JSON.parse(JSON.stringify(annotations)));
+
 
     for (const annotation of sortedAnnotations) {
-      const walker = document.createTreeWalker(
-        tempDiv,
-        NodeFilter.SHOW_TEXT,
-        null
-      );
+      console.log("highlightText: Current annotation:", JSON.parse(JSON.stringify(annotation)));
+      console.log("highlightText: Checking type. Is 'highlight'?", annotation.type === 'highlight');
 
-      let currentOffset = 0;
-      let startNode: Text | null = null;
-      let endNode: Text | null = null;
-      let startNodeOffset = 0;
-      let endNodeOffset = 0;
+      // Only proceed with DOM manipulation if it's a highlight type that requires span insertion.
+      // Note markers are handled differently if they are not also highlights.
+      if (annotation.type === 'highlight') {
+        const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
+        console.log("highlightText: Color:", annotation.color, "Generated bgColorClass:", bgColorClass);
 
-      let currentNode;
-      while (currentNode = walker.nextNode()) {
-        const nodeText = currentNode.textContent || "";
-        const nodeLength = nodeText.length;
+        const walker = document.createTreeWalker(
+          tempDiv,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
 
-        if (startNode === null && currentOffset + nodeLength > annotation.startOffset) {
-          startNode = currentNode as Text;
-          startNodeOffset = annotation.startOffset - currentOffset;
-        }
+        let currentOffset = 0;
+        let startNode: Text | null = null;
+        let endNode: Text | null = null;
+        let startNodeOffset = 0;
+        let endNodeOffset = 0;
 
-        if (endNode === null && currentOffset + nodeLength >= annotation.endOffset) {
-          endNode = currentNode as Text;
-          endNodeOffset = annotation.endOffset - currentOffset;
-          break; 
-        }
-        currentOffset += nodeLength;
-      }
+        let currentNode;
+        while (currentNode = walker.nextNode()) {
+          const nodeText = currentNode.textContent || "";
+          const nodeLength = nodeText.length;
 
-      if (startNode && endNode) {
-        const range = document.createRange();
-        try {
-          range.setStart(startNode, startNodeOffset);
-          range.setEnd(endNode, endNodeOffset);
-
-          const spanElement = document.createElement('span');
-          spanElement.className = "annotation-highlight";
-          if (annotation.type === 'highlight') {
-            const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
-            spanElement.classList.add(bgColorClass);
-          }
-          spanElement.setAttribute('data-annotation-id', annotation.id.toString());
-          spanElement.setAttribute('data-annotation-start', annotation.startOffset.toString());
-          if (annotation.note) {
-            spanElement.setAttribute('title', annotation.note);
-          }
-          
-          // Ensure spanElement does not contain the marker text before surroundContents.
-          range.surroundContents(spanElement); // Moves the original document content into the span.
-          
-          // Add marker text AFTER the span if it's a 'note' type annotation 
-          // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
-          const annotationMarkerText = annotation.type === 'note' ? ' 📝' : '';
-          if (annotationMarkerText && spanElement.parentNode) {
-            const markerNode = document.createTextNode(annotationMarkerText);
-            // Insert the marker text node immediately after the spanElement.
-            // If spanElement.nextSibling is null, it will be appended at the end of parentNode's children, which is fine.
-            spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
+          if (startNode === null && currentOffset + nodeLength > annotation.startOffset) {
+            startNode = currentNode as Text;
+            startNodeOffset = annotation.startOffset - currentOffset;
           }
 
-        } catch (e) {
-          console.error("Error surrounding contents for annotation:", annotation.id, e);
-          // Fallback or error handling if needed
+          if (endNode === null && currentOffset + nodeLength >= annotation.endOffset) {
+            endNode = currentNode as Text;
+            endNodeOffset = annotation.endOffset - currentOffset;
+            break;
+          }
+          currentOffset += nodeLength;
         }
+
+        if (startNode && endNode) {
+          const range = document.createRange();
+          try {
+            range.setStart(startNode, startNodeOffset);
+            range.setEnd(endNode, endNodeOffset);
+            console.log(`highlightText: Nodes found for ann ID ${annotation.id}. StartNode text (partial): '${startNode.textContent?.substring(startNodeOffset, startNodeOffset + 20)}', EndNode text (partial): '${endNode.textContent?.substring(endNodeOffset - 20, endNodeOffset)}'`);
+            console.log(`highlightText: Range to be highlighted: '${range.toString().substring(0, 100)}'`);
+
+            const spanElement = document.createElement('span');
+            spanElement.className = "annotation-highlight"; // Base class
+            spanElement.classList.add(bgColorClass); // Add color class
+            spanElement.setAttribute('data-annotation-id', annotation.id.toString());
+            spanElement.setAttribute('data-annotation-start', annotation.startOffset.toString());
+            if (annotation.note) {
+              spanElement.setAttribute('title', annotation.note);
+            }
+            console.log(`highlightText: Preparing span for ann ID ${annotation.id}: ${spanElement.outerHTML.split('>')[0] + ">"}`);
+            
+            console.log("highlightText: Attempting range.surroundContents() for ann ID", annotation.id);
+            range.surroundContents(spanElement); // Moves the original document content into the span.
+            console.log("highlightText: surroundContents() successful for ann ID", annotation.id);
+            
+            // Add marker text AFTER the span if it's a 'note' type annotation 
+            // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
+            // This part is specific to 'note' type, but a highlight can also be a note.
+            const annotationMarkerText = annotation.note ? ' 📝' : ''; // Assuming a note implies a marker
+            if (annotationMarkerText && spanElement.parentNode) {
+              const markerNode = document.createTextNode(annotationMarkerText);
+              spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
+            }
+
+          } catch (e) {
+            console.error(`highlightText: Error in surroundContents for ann ID ${annotation.id}`, e, `Range text: ${range.toString().substring(0,100)}`);
+          }
+        } else {
+          console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. StartOffset: ${annotation.startOffset}, EndOffset: ${annotation.endOffset}`);
+        }
+      } else if (annotation.type === 'note') {
+        // If it's a note but NOT a highlight, we might still want to place a marker.
+        // This part of the logic for non-highlight notes needs to be carefully considered
+        // if markers are desired for notes that don't also highlight text.
+        // For now, the marker logic is tied to the span created for highlights.
+        // If a note exists without a highlight, its marker won't be placed by current code.
+         console.log("highlightText: Annotation is of type 'note' but not 'highlight'. Marker logic for this case might need review if markers are desired without highlighting text.");
       } else {
-        console.warn("Could not find nodes for annotation:", annotation.id, "Start:", annotation.startOffset, "End:", annotation.endOffset);
+        console.log("highlightText: Annotation is NOT of type 'highlight' or 'note'. Type:", annotation.type);
       }
     }
+    console.log("highlightText: Returning. Final innerHTML snippet (first 500):", tempDiv.innerHTML.substring(0, 500));
     return tempDiv.innerHTML;
   };
 
