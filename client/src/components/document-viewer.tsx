@@ -185,16 +185,20 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   const highlightText = (content: string) => {
     let highlightedContent = content;
-    console.log('DocumentViewer highlightText - Annotations:', JSON.stringify(annotations));
+    console.log("DocumentViewer highlightText - Initial content length:", content.length);
     // Sort annotations by start offset to process them in order
     const sortedAnnotations = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
     
     // Apply highlights in reverse order to maintain offset positions
     for (let i = sortedAnnotations.length - 1; i >= 0; i--) {
       const annotation = sortedAnnotations[i];
+      console.log("Processing annotation:", JSON.stringify(annotation));
+
       const before = highlightedContent.substring(0, annotation.startOffset);
       const highlighted = highlightedContent.substring(annotation.startOffset, annotation.endOffset);
       const after = highlightedContent.substring(annotation.endOffset);
+      console.log("Substrings - Before length:", before.length, "Highlighted length:", highlighted.length, "After length:", after.length);
+      console.log("Highlighted text snippet:", highlighted.substring(0, 50));
       
       let spanClass = "annotation-highlight";
       if (annotation.type === 'highlight') {
@@ -204,6 +208,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
       
       highlightedContent = `${before}<span class="${spanClass}" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}">${highlighted}${annotationMarker}</span>${after}`;
+      console.log("DocumentViewer highlightText - highlightedContent length after this annotation:", highlightedContent.length);
     }
     
     return highlightedContent;
