@@ -184,8 +184,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   };
 
   const highlightText = (content: string) => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
-      return content; // Return original content if not in a browser environment
+    if (
+      typeof document === 'undefined' ||
+      typeof document.createElement === 'undefined' ||
+      typeof document.createTreeWalker === 'undefined' ||
+      typeof document.createRange === 'undefined'
+    ) {
+      return content; // Return original content if not in a browser environment or document is missing methods
     }
 
     const tempDiv = document.createElement('div');
