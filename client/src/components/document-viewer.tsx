@@ -192,28 +192,28 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   const highlightText = (content: string) => {
     if (
-      typeof document === 'undefined' ||
-      typeof document.createElement !== 'function' ||
-      typeof document.createTreeWalker !== 'function' ||
-      typeof document.createRange !== 'function'
+      typeof window.document === 'undefined' ||
+      typeof window.document.createElement !== 'function' ||
+      typeof window.document.createTreeWalker !== 'function' ||
+      typeof window.document.createRange !== 'function'
     ) {
-      let docDetails = "document is undefined";
-      if (typeof document !== 'undefined') {
-        docDetails = `constructor: ${document.constructor ? document.constructor.name : 'N/A'}, ` +
-                     `typeof createElement: ${typeof document.createElement}, ` +
-                     `typeof createTreeWalker: ${typeof document.createTreeWalker}, ` +
-                     `typeof createRange: ${typeof document.createRange}, ` +
-                     `keys.length: ${Object.keys(document).length}, ` +
-                     `first 20 keys: ${Object.keys(document).slice(0, 20).join(', ')}`;
+      let docDetails = "window.document is undefined";
+      if (typeof window.document !== 'undefined') { // Check window.document here
+        docDetails = `constructor: ${window.document.constructor ? window.document.constructor.name : 'N/A'}, ` +
+                     `typeof createElement: ${typeof window.document.createElement}, ` +
+                     `typeof createTreeWalker: ${typeof window.document.createTreeWalker}, ` +
+                     `typeof createRange: ${typeof window.document.createRange}, ` +
+                     `keys.length: ${Object.keys(window.document).length}, ` +
+                     `first 20 keys: ${Object.keys(window.document).slice(0, 20).join(', ')}`;
       }
-      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof document:", typeof document, "Details:", docDetails);
+      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof window.document:", typeof window.document, "Details:", docDetails);
       return content;
     } else {
-      console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic.");
+      console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic. typeof window.document:", typeof window.document);
     }
     console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
 
-    const tempDiv = document.createElement('div');
+    const tempDiv = window.document.createElement('div');
     tempDiv.innerHTML = content;
 
     // Sort annotations by start offset in descending order
@@ -231,7 +231,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
         console.log("highlightText: Color:", annotation.color, "Generated bgColorClass:", bgColorClass);
 
-        const walker = document.createTreeWalker(
+        const walker = window.document.createTreeWalker(
           tempDiv,
           NodeFilter.SHOW_TEXT,
           null
@@ -262,14 +262,14 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         }
 
         if (startNode && endNode) {
-          const range = document.createRange();
+          const range = window.document.createRange();
           try {
             range.setStart(startNode, startNodeOffset);
             range.setEnd(endNode, endNodeOffset);
             console.log(`highlightText: Nodes found for ann ID ${annotation.id}. StartNode text (partial): '${startNode.textContent?.substring(startNodeOffset, startNodeOffset + 20)}', EndNode text (partial): '${endNode.textContent?.substring(endNodeOffset - 20, endNodeOffset)}'`);
             console.log(`highlightText: Range to be highlighted: '${range.toString().substring(0, 100)}'`);
 
-            const spanElement = document.createElement('span');
+            const spanElement = window.document.createElement('span');
             spanElement.className = "annotation-highlight"; // Base class
             spanElement.classList.add(bgColorClass); // Add color class
             spanElement.setAttribute('data-annotation-id', annotation.id.toString());
@@ -288,7 +288,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             // This part is specific to 'note' type, but a highlight can also be a note.
             const annotationMarkerText = annotation.note ? ' 📝' : ''; // Assuming a note implies a marker
             if (annotationMarkerText && spanElement.parentNode) {
-              const markerNode = document.createTextNode(annotationMarkerText);
+              const markerNode = window.document.createTextNode(annotationMarkerText);
               spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
             }
 
