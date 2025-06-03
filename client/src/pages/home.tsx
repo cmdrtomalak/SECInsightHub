@@ -312,12 +312,6 @@ export default function Home() {
       // navigate("/");
     }
   };
-    if (startOffset !== undefined) {
-      setTimeout(() => {
-        handleJumpToAnnotation(startOffset);
-      }, 100);
-    }
-  };
 
   const handleJumpToAnnotation = (startOffset: number) => {
     // Send message to document viewer to scroll to annotation
