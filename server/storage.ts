@@ -1,6 +1,11 @@
-import { companies, documents, annotations, type Company, type Document, type Annotation, type InsertCompany, type InsertDocument, type InsertAnnotation } from "@shared/schema";
+import {
+  companies, documents, annotations, documentChunks,
+  type Company, type Document, type Annotation, type InsertCompany, type InsertDocument, type InsertAnnotation, type InsertDocumentChunk, type DocumentChunk
+} from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, like, or, sql } from "drizzle-orm";
+import { eq, desc, like, or, sql, and } from "drizzle-orm";
+
+const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB in characters
 
 export interface IStorage {
   // Company methods
@@ -12,9 +17,10 @@ export interface IStorage {
   getDocument(id: number): Promise<Document | undefined>;
   getDocumentByAccession(accessionNumber: string): Promise<Document | undefined>;
   createDocument(document: InsertDocument): Promise<Document>;
-  updateDocumentContent(id: number, content: string, totalPages?: number): Promise<void>;
+  updateDocumentContent(id: number, content: string, totalPagesInput?: number): Promise<void>; // totalPagesInput will be ignored
   updateDocumentLastAccessed(id: number): Promise<void>;
   getRecentDocuments(limit: number): Promise<(Document & { companyName: string })[]>;
+  getDocumentChunk(documentId: number, pageNumber: number): Promise<DocumentChunk | undefined>;
   getCompanyDocuments(companyId: number): Promise<Document[]>;
 
   // Annotation methods
@@ -74,15 +80,61 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
-  async updateDocumentContent(id: number, content: string, totalPages?: number): Promise<void> {
-    const updates: any = { content };
-    if (totalPages) {
-      updates.totalPages = totalPages;
+  async updateDocumentContent(id: number, content: string, totalPagesInput?: number): Promise<void> {
+    // totalPagesInput is ignored, it will be calculated based on chunks.
+    console.log(`[Storage updateDocumentContent] Updating document ID ${id}. Received content length: ${content?.length}. Original totalPages (ignored): ${totalPagesInput}`);
+
+    // Clear existing chunks for this document
+    await db.delete(documentChunks).where(eq(documentChunks.documentId, id));
+    console.log(`[Storage updateDocumentContent] Cleared existing chunks for document ID ${id}`);
+
+    const numChunks = Math.ceil(content.length / DEFAULT_CHUNK_SIZE);
+    const newChunks: InsertDocumentChunk[] = [];
+    for (let i = 0; i < numChunks; i++) {
+      newChunks.push({
+        documentId: id,
+        pageNumber: i + 1, // 1-based page number
+        content: content.substring(i * DEFAULT_CHUNK_SIZE, (i + 1) * DEFAULT_CHUNK_SIZE),
+        // createdAt will be set by default by the database
+      });
     }
+
+    if (newChunks.length > 0) {
+      await db.insert(documentChunks).values(newChunks);
+      console.log(`[Storage updateDocumentContent] Inserted ${newChunks.length} new chunks for document ID ${id}`);
+    } else {
+      console.log(`[Storage updateDocumentContent] No new chunks to insert for document ID ${id} (content might be empty).`);
+    }
+
+    // Update the main document entry
     await db
       .update(documents)
-      .set(updates)
+      .set({
+        totalPages: numChunks > 0 ? numChunks : 1, // Ensure totalPages is at least 1
+        content: null, // Clear the main content field, or use a preview: newChunks[0]?.content.substring(0, 500)
+        lastAccessedAt: sql`now()` // Keep updating lastAccessedAt
+      })
       .where(eq(documents.id, id));
+    console.log(`[Storage updateDocumentContent] Updated main document entry for ID ${id}. Set totalPages to ${numChunks > 0 ? numChunks : 1} and cleared content.`);
+  }
+
+  async getDocumentChunk(documentId: number, pageNumber: number): Promise<DocumentChunk | undefined> {
+    const [chunk] = await db
+      .select()
+      .from(documentChunks)
+      .where(
+        and(
+          eq(documentChunks.documentId, documentId),
+          eq(documentChunks.pageNumber, pageNumber)
+        )
+      )
+      .limit(1);
+    if (chunk) {
+      console.log(`[Storage getDocumentChunk] Retrieved chunk for document ID ${documentId}, page ${pageNumber}. Chunk content length: ${chunk.content.length}`);
+    } else {
+      console.log(`[Storage getDocumentChunk] No chunk found for document ID ${documentId}, page ${pageNumber}.`);
+    }
+    return chunk || undefined;
   }
 
   async updateDocumentLastAccessed(id: number): Promise<void> {

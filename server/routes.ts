@@ -156,17 +156,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/documents/:id/content", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { content, totalPages } = req.body;
+      const { content, totalPages } = req.body; // totalPages from body will be ignored by storage.updateDocumentContent
+      console.log(`[PATCH /api/documents/:id/content] Received content for document ID ${id}. Content length: ${content?.length}, Input totalPages (ignored): ${totalPages}`);
       
-      if (!content) {
-        return res.status(400).json({ error: "Content is required" });
+      if (typeof content !== 'string') { // Ensure content is a string
+        return res.status(400).json({ error: "Content is required and must be a string" });
       }
       
-      await storage.updateDocumentContent(id, content, totalPages);
+      await storage.updateDocumentContent(id, content); // Pass only id and content
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating document content:", error);
       res.status(500).json({ error: "Failed to update document content" });
+    }
+  });
+
+  // New endpoint to get a specific page/chunk of a document
+  app.get("/api/documents/:documentId/page/:pageNumber", async (req, res) => {
+    try {
+      const documentId = parseInt(req.params.documentId);
+      const pageNumber = parseInt(req.params.pageNumber);
+
+      if (isNaN(documentId) || isNaN(pageNumber)) {
+        return res.status(400).json({ error: "Invalid document ID or page number." });
+      }
+
+      const chunk = await storage.getDocumentChunk(documentId, pageNumber);
+
+      if (!chunk) {
+        return res.status(404).json({ error: "Document page not found." });
+      }
+
+      res.json(chunk);
+    } catch (error) {
+      console.error(`Error fetching document page: docId=${req.params.documentId}, page=${req.params.pageNumber}`, error);
+      res.status(500).json({ error: "Failed to fetch document page." });
     }
   });
 
@@ -275,6 +299,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const content = await response.text();
+      console.log(`[/api/sec/document] Fetched content from SEC. URL: ${url}, Content length: ${content?.length}`);
+      console.log(`[/api/sec/document] Sending content to client. URL: ${url}, Content length: ${content?.length}`);
       res.json({ content });
     } catch (error) {
       console.error("Error fetching SEC document:", error);

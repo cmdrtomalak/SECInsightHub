@@ -40,6 +40,15 @@ export const annotations = pgTable("annotations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// New table for document chunks
+export const documentChunks = pgTable("document_chunks", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull(),
+  pageNumber: integer("page_number").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const companiesRelations = relations(companies, ({ many }) => ({
   documents: many(documents),
 }));
@@ -50,6 +59,15 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
     references: [companies.id],
   }),
   annotations: many(annotations),
+  chunks: many(documentChunks), // New relation
+}));
+
+// Relations for document_chunks
+export const documentChunksRelations = relations(documentChunks, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentChunks.documentId],
+    references: [documents.id],
+  }),
 }));
 
 export const annotationsRelations = relations(annotations, ({ one }) => ({
@@ -84,6 +102,10 @@ export type Document = typeof documents.$inferSelect;
 
 export type InsertAnnotation = z.infer<typeof insertAnnotationSchema>;
 export type Annotation = typeof annotations.$inferSelect;
+
+// Types for document_chunks
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type InsertDocumentChunk = typeof documentChunks.$inferInsert;
 
 export type User = {
   id: number;

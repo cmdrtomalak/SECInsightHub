@@ -24,8 +24,11 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
     queryKey: ["/api/documents", documentId, "annotations"],
     queryFn: async () => {
       const response = await fetch(`/api/documents/${documentId}/annotations`);
+      console.log("AnnotationPanel: Raw response for annotations, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch annotations");
-      return response.json();
+      const annotationsData = await response.json();
+      console.log("AnnotationPanel: Parsed annotations for documentId:", documentId, annotationsData);
+      return annotationsData;
     },
   });
 
@@ -86,6 +89,17 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
       default:
         return "text-gray-700 bg-gray-100";
     }
+  };
+
+  const getFormattedDate = (createdAt: string | null | undefined) => {
+    if (!createdAt) return "Date N/A";
+    const date = new Date(createdAt);
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn("AnnotationPanel: Invalid date encountered for createdAt:", createdAt);
+      return "Invalid Date"; // Or "Date N/A"
+    }
+    return formatDistanceToNow(date, { addSuffix: true });
   };
 
   if (isCollapsed) {
@@ -160,7 +174,27 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
             </p>
           </div>
         ) : (
-          annotations.map((annotation: Annotation) => (
+          annotations.map((annotation: Annotation) => {
+            console.log("AnnotationPanel: Rendering annotation in map:", annotation);
+            if (
+              annotation.selectedText === null || annotation.selectedText === undefined ||
+              annotation.note === undefined || // Note can be null, that's fine
+              annotation.pageNumber === null || annotation.pageNumber === undefined || isNaN(annotation.pageNumber) ||
+              annotation.createdAt === null || annotation.createdAt === undefined ||
+              annotation.type === null || annotation.type === undefined ||
+              annotation.color === null || annotation.color === undefined
+            ) {
+              console.warn(
+                "AnnotationPanel: Potentially problematic annotation data during render. ID:", annotation.id,
+                "selectedText:", annotation.selectedText,
+                "note:", annotation.note,
+                "pageNumber:", annotation.pageNumber,
+                "createdAt:", annotation.createdAt,
+                "type:", annotation.type,
+                "color:", annotation.color
+              );
+            }
+            return (
             <div
               key={annotation.id}
               className={`${getAnnotationColor(annotation.type, annotation.color || "orange")} cursor-pointer hover:shadow-md transition-shadow relative ${selectedAnnotationForAmend?.id === annotation.id ? 'ring-2 ring-primary ring-offset-1' : ''}`}
@@ -174,12 +208,12 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
                   {annotation.type.charAt(0).toUpperCase() + annotation.type.slice(1)}
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Page {annotation.pageNumber}
+                  Page {typeof annotation.pageNumber === 'number' && !isNaN(annotation.pageNumber) ? annotation.pageNumber : "N/A"}
                 </span>
               </div>
               
               <p className="text-sm text-foreground mb-2">
-                "{annotation.selectedText.substring(0, 100)}..."
+                "{annotation.selectedText?.substring(0, 100)}..."
               </p>
               
               {annotation.note && (
@@ -190,7 +224,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
               
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-600 dark:text-gray-400">
-                  {annotation.createdAt ? formatDistanceToNow(new Date(annotation.createdAt), { addSuffix: true }) : "Date N/A"}
+                  {getFormattedDate(annotation.createdAt)}
                 </span>
                 <div className="flex space-x-1">
                   <Button
@@ -208,7 +242,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
                 </div>
               </div>
             </div>
-          ))
+          )})
         )}
       </div>
 
