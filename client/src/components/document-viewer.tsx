@@ -44,6 +44,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     enabled: !!documentId,
   });
 
+  console.log(
+    "DocumentViewer: Rendering. documentId:", documentId,
+    "Annotations count:", annotations.length,
+    "Last annotation ID:", annotations.length > 0 ? annotations[annotations.length - 1]?.id : "N/A",
+    "Document content snippet (first 100):", document?.content?.substring(0,100) ?? "N/A"
+  );
+
   useEffect(() => {
     if (contentRef.current) {
       const cleanup = setupTextSelection(contentRef.current, (text: string, startOffset: number, endOffset: number, event: MouseEvent) => {
@@ -68,9 +75,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       }
     };
 
-    if (contextMenu) {
+    if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      return () => {
+        if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+          document.removeEventListener('click', handleClickOutside);
+        }
+      };
     }
   }, [contextMenu]);
 
@@ -164,56 +175,128 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     );
   }
 
-  const getHighlightClass = (color: string) => {
+  const getHighlightBackgroundColorClass = (color: string): string => {
     switch (color) {
       case 'orange':
-        return 'bg-orange-200 hover:bg-orange-300';
+        return 'highlight-bg-orange';
       case 'green':
-        return 'bg-green-200 hover:bg-green-300';
+        return 'highlight-bg-green';
       case 'pink':
-        return 'bg-pink-200 hover:bg-pink-300';
+        return 'highlight-bg-pink';
       case 'blue':
-        return 'bg-blue-200 hover:bg-blue-300';
+        return 'highlight-bg-blue';
       default:
-        return 'bg-orange-200 hover:bg-orange-300';
-    }
-  };
-
-  const getHighlightBackgroundColor = (color: string) => {
-    switch (color) {
-      case 'orange':
-        return '#fed7aa';
-      case 'green':
-        return '#bbf7d0';
-      case 'pink':
-        return '#fce7f3';
-      case 'blue':
-        return '#dbeafe';
-      default:
-        return '#fed7aa';
+        return 'highlight-bg-default'; // Default to orange-like highlight
     }
   };
 
   const highlightText = (content: string) => {
-    let highlightedContent = content;
-    
-    // Sort annotations by start offset to process them in order
-    const sortedAnnotations = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
-    
-    // Apply highlights in reverse order to maintain offset positions
-    for (let i = sortedAnnotations.length - 1; i >= 0; i--) {
-      const annotation = sortedAnnotations[i];
-      const before = highlightedContent.substring(0, annotation.startOffset);
-      const highlighted = highlightedContent.substring(annotation.startOffset, annotation.endOffset);
-      const after = highlightedContent.substring(annotation.endOffset);
-      
-      const colorClass = getHighlightClass(annotation.color);
-      const annotationMarker = annotation.type === 'note' ? ' 📝' : '';
-      
-      highlightedContent = `${before}<span class="annotation-highlight" data-annotation-id="${annotation.id}" data-annotation-start="${annotation.startOffset}" title="${annotation.note || ''}" style="background-color: ${getHighlightBackgroundColor(annotation.color)}; padding: 1px 2px; border-radius: 2px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">${highlighted}${annotationMarker}</span>${after}`;
+    if (
+      typeof window.document === 'undefined' ||
+      typeof window.document.createElement !== 'function' ||
+      typeof window.document.createTreeWalker !== 'function' ||
+      typeof window.document.createRange !== 'function'
+    ) {
+      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof window.document:", typeof window.document);
+      return content;
+    } else {
+      console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic. typeof window.document:", typeof window.document);
     }
-    
-    return highlightedContent;
+    // console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500)); // Removed
+
+    const tempDiv = window.document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Sort annotations by start offset in descending order
+    const sortedAnnotations = [...annotations].sort((a, b) => b.startOffset - a.startOffset);
+    // console.log("highlightText: Processing annotations:", JSON.parse(JSON.stringify(annotations))); // Removed
+
+
+    for (const annotation of sortedAnnotations) {
+      // console.log("highlightText: Current annotation:", JSON.parse(JSON.stringify(annotation))); // Removed
+      // console.log("highlightText: Checking type. Is 'highlight'?", annotation.type === 'highlight'); // Removed
+
+      // Only proceed with DOM manipulation if it's a highlight type that requires span insertion.
+      // Note markers are handled differently if they are not also highlights.
+      if (annotation.type === 'highlight') {
+        const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
+        // console.log("highlightText: Color:", annotation.color, "Generated bgColorClass:", bgColorClass); // Removed
+
+        const walker = window.document.createTreeWalker(
+          tempDiv,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+
+        let currentOffset = 0;
+        let startNode: Text | null = null;
+        let endNode: Text | null = null;
+        let startNodeOffset = 0;
+        let endNodeOffset = 0;
+
+        let currentNode;
+        while (currentNode = walker.nextNode()) {
+          const nodeText = currentNode.textContent || "";
+          const nodeLength = nodeText.length;
+
+          if (startNode === null && currentOffset + nodeLength > annotation.startOffset) {
+            startNode = currentNode as Text;
+            startNodeOffset = annotation.startOffset - currentOffset;
+          }
+
+          if (endNode === null && currentOffset + nodeLength >= annotation.endOffset) {
+            endNode = currentNode as Text;
+            endNodeOffset = annotation.endOffset - currentOffset;
+            break;
+          }
+          currentOffset += nodeLength;
+        }
+
+        if (startNode && endNode) {
+          const range = window.document.createRange();
+          try {
+            range.setStart(startNode, startNodeOffset);
+            range.setEnd(endNode, endNodeOffset);
+            // console.log(`highlightText: Nodes found for ann ID ${annotation.id}. StartNode text (partial): '${startNode.textContent?.substring(startNodeOffset, startNodeOffset + 20)}', EndNode text (partial): '${endNode.textContent?.substring(endNodeOffset - 20, endNodeOffset)}'`); // Removed
+            // console.log(`highlightText: Range to be highlighted: '${range.toString().substring(0, 100)}'`); // Removed
+
+            const spanElement = window.document.createElement('span');
+            spanElement.className = "annotation-highlight"; // Base class
+            spanElement.classList.add(bgColorClass); // Add color class
+            spanElement.setAttribute('data-annotation-id', annotation.id.toString());
+            spanElement.setAttribute('data-annotation-start', annotation.startOffset.toString());
+            if (annotation.note) {
+              spanElement.setAttribute('title', annotation.note);
+            }
+            // console.log(`highlightText: Preparing span for ann ID ${annotation.id}: ${spanElement.outerHTML.split('>')[0] + ">"}`); // Removed
+
+            // console.log("highlightText: Attempting range.surroundContents() for ann ID", annotation.id); // Removed
+            range.surroundContents(spanElement); // Moves the original document content into the span.
+            // console.log("highlightText: surroundContents() successful for ann ID", annotation.id); // Removed
+
+            // Add marker text AFTER the span if it's a 'note' type annotation
+            // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
+            // This part is specific to 'note' type, but a highlight can also be a note.
+            const annotationMarkerText = annotation.note ? ' 📝' : ''; // Assuming a note implies a marker
+            if (annotationMarkerText && spanElement.parentNode) {
+              const markerNode = window.document.createTextNode(annotationMarkerText);
+              spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
+            }
+
+          } catch (e) {
+            console.error(`highlightText: Error in surroundContents for ann ID ${annotation.id}`, e, `Range text: ${range.toString().substring(0,100)}`);
+          }
+        } else {
+          console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. StartOffset: ${annotation.startOffset}, EndOffset: ${annotation.endOffset}`);
+        }
+      } else if (annotation.type === 'note') {
+        // console.log("highlightText: Annotation is of type 'note' but not 'highlight'. Marker logic for this case might need review if markers are desired without highlighting text."); // Removed
+      } else {
+        // console.log("highlightText: Annotation is NOT of type 'highlight' or 'note'. Type:", annotation.type); // Removed
+      }
+    }
+    // console.log("highlightText: Returning. Final innerHTML snippet (first 500):", tempDiv.innerHTML.substring(0, 500)); // Removed
+    return tempDiv.innerHTML;
   };
 
   return (
@@ -293,7 +376,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
               }}
             >
               <Highlighter className="h-4 w-4" />
-              <span>Add Highlight</span>
+              <span>Annotate</span>
             </button>
             <button
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"

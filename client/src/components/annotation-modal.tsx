@@ -69,16 +69,18 @@ export default function AnnotationModal({
       return;
     }
 
-    createAnnotationMutation.mutate({
+    const payload = {
       documentId,
       type: annotationType,
       selectedText: selectedText.trim(),
-      note: note.trim() || null,
-      color,
+      note: annotationType === 'note' ? note.trim() : (note.trim() || null),
+      color: annotationType === 'highlight' ? color : 'orange', // If highlight, use selected color, else default to orange
       pageNumber: 1, // TODO: Calculate actual page number
       startOffset: selectionRange.startOffset,
       endOffset: selectionRange.endOffset,
-    });
+    };
+
+    createAnnotationMutation.mutate(payload);
   };
 
   const handleClose = () => {
@@ -134,7 +136,10 @@ export default function AnnotationModal({
               </button>
               <button
                 className={getTypeButtonClass("note")}
-                onClick={() => setAnnotationType("note")}
+                onClick={() => {
+                  setAnnotationType("note");
+                  setColor("orange"); // Default color for notes as per schema
+                }}
               >
                 Note
               </button>
@@ -180,7 +185,9 @@ export default function AnnotationModal({
               rows={3}
               placeholder="Add your note here..."
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => {
+                setNote(e.target.value);
+              }}
             />
           </div>
 
