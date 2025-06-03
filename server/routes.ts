@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDocumentSchema, insertAnnotationSchema } from "@shared/schema";
+import { insertCompanySchema, insertDocumentSchema, insertAnnotationSchema, type InsertDocument } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -142,17 +142,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-import { type InsertDocument } from "@shared/schema"; // Ensure this is at the top with other imports
-
-// ... other routes ...
-
   app.post("/api/documents", async (req, res) => {
     try {
       const incomingData = req.body;
 
       // 1. Validate incoming metadata
-      // insertDocumentSchema includes `documentUrl` as `text("document_url").notNull()`.
-      // `content` and `totalPages` are optional or have defaults in insertDocumentSchema.
       const importRequestSchema = insertDocumentSchema.pick({
         companyId: true,
         accessionNumber: true,
@@ -160,7 +154,7 @@ import { type InsertDocument } from "@shared/schema"; // Ensure this is at the t
         filingDate: true,
         documentUrl: true,
         title: true,
-        reportDate: true // reportDate is optional (text or null)
+        reportDate: true
       });
 
       const validatedData = importRequestSchema.parse(incomingData);
@@ -184,23 +178,15 @@ import { type InsertDocument } from "@shared/schema"; // Ensure this is at the t
       }
 
       if (!fullContent || fullContent.trim() === '') {
-        // This case might indicate an issue with the SEC document itself (e.g., it's empty)
-        // or an unexpected response from SEC that wasn't caught by !secFetchResponse.ok
-        console.warn(`[Server] POST /api/documents: Fetched document content from SEC is empty. URL: ${validatedData.documentUrl}`);
+        // This check is after fetching from SEC
         return res.status(400).json({ error: "Fetched document content from SEC is empty or invalid." });
       }
 
       // 3. Create initial document entry (metadata only)
       const documentToCreate: InsertDocument = {
-        companyId: validatedData.companyId,
-        accessionNumber: validatedData.accessionNumber,
-        formType: validatedData.formType,
-        filingDate: validatedData.filingDate,
-        reportDate: validatedData.reportDate, // Will be null if not provided, as per schema
-        documentUrl: validatedData.documentUrl,
-        title: validatedData.title,
-        content: null, // Content will be chunked
-        totalPages: 0, // Will be updated by updateDocumentContent
+        ...validatedData,
+        content: null,
+        totalPages: 0,
       };
       const newDocumentMetadata = await storage.createDocument(documentToCreate);
       console.log(`[Server] POST /api/documents: Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
