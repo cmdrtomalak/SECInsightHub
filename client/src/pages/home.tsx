@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useParams } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // Added useQueryClient
-import type { Annotation } from "@shared/schema"; // Added Annotation type
+import { useParams, useLocation } from "wouter"; // Added useLocation
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Annotation } from "@shared/schema";
 import CompanySearch from "@/components/company-search";
 import RecentDocuments from "@/components/recent-documents";
 import AnnotationSearch from "@/components/annotation-search";
@@ -16,12 +16,17 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const params = useParams();
+  const [, navigate] = useLocation(); // Added navigate from wouter
   const { toast } = useToast();
-  const queryClient = useQueryClient(); // Added queryClient
+  const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const initialDocIdFromParams = params.id ? Number(params.id) : null;
+  console.log("[Home Page] Initial document ID from URL params:", params.id, "Type:", typeof params.id, "Parsed:", initialDocIdFromParams);
   const [currentDocumentId, setCurrentDocumentId] = useState<number | null>(
-    params.id ? parseInt(params.id) : null
+    initialDocIdFromParams !== null && !isNaN(initialDocIdFromParams) ? initialDocIdFromParams : null
   );
+
   const [annotationModalOpen, setAnnotationModalOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [selectionRange, setSelectionRange] = useState<{
@@ -119,12 +124,48 @@ export default function Home() {
       return await apiRequest("POST", "/api/documents", documentData);
     },
     onSuccess: (newDocument: any) => {
-      setCurrentDocumentId(newDocument.id);
-      window.history.pushState({}, "", `/document/${newDocument.id}`);
-      toast({
-        title: "Demo document loaded",
-        description: "Apple's latest 10-K has been loaded for demonstration.",
-      });
+      console.log("[Home Page] createAppleDocumentMutation.onSuccess: newDocument.id:", newDocument.id, "Type:", typeof newDocument.id);
+      let numericId = null;
+      if (newDocument && typeof newDocument.id === 'number' && !isNaN(newDocument.id)) {
+        numericId = newDocument.id;
+      } else if (newDocument && newDocument.id !== undefined && newDocument.id !== null) {
+        const parsedId = Number(newDocument.id);
+        if (!isNaN(parsedId)) {
+          numericId = parsedId;
+        } else {
+          console.warn("[Home Page] createAppleDocumentMutation.onSuccess: Failed to parse newDocument.id:", newDocument.id);
+        }
+      } else {
+          console.warn("[Home Page] createAppleDocumentMutation.onSuccess: newDocument.id is missing or invalid:", newDocument);
+      }
+      setCurrentDocumentId(numericId);
+
+      if (numericId !== null) {
+        navigate(`/document/${numericId}`);
+        toast({
+          title: "Demo document loaded",
+          description: "Apple's latest 10-K has been loaded for demonstration.",
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/documents/recent'] });
+        // console.log("[Home Page] Invalidated recent documents query after demo load.");
+      } else {
+        navigate("/"); // Navigate to a neutral state if ID is bad
+        toast({
+          title: "Demo document loaded",
+          description: "Apple's latest 10-K has been loaded for demonstration.",
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/documents/recent'] });
+        // Optionally, invalidate company-specific documents if appleCompany.id is available here
+        // queryClient.invalidateQueries({ queryKey: ['/api/companies', appleCompany.id, 'documents'] });
+
+      } else {
+        navigate("/"); // Navigate to a neutral state if ID is bad
+        toast({
+          title: "Error Loading Demo",
+          description: "Could not determine a valid ID for the demo document.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error) => {
       console.error("Failed to load demo document:", error);
@@ -132,9 +173,21 @@ export default function Home() {
   });
 
   useEffect(() => {
+    console.log("[Home Page] useEffect for params.id: Current params.id:", params.id, "Type:", typeof params.id);
+    let numericId = null;
     if (params.id) {
-      setCurrentDocumentId(parseInt(params.id));
+      const parsedId = Number(params.id);
+      if (!isNaN(parsedId)) {
+        numericId = parsedId;
+      } else {
+        console.warn("[Home Page] useEffect params.id: Failed to parse ID from URL params:", params.id, "Setting documentId to null.");
+      }
+    } else if (params.id === null || params.id === undefined) {
+        console.log("[Home Page] useEffect for params.id: params.id is null or undefined, setting currentDocumentId to null.");
     }
+    // Only update if the new numericId is different from currentDocumentId to avoid potential loops if params.id is derived from currentDocumentId
+    // However, wouter's params should be independent.
+    setCurrentDocumentId(numericId);
   }, [params.id]);
 
   // Auto-load Apple 10-K if no documents exist and not already initialized
@@ -215,16 +268,52 @@ export default function Home() {
     handleOpenAnnotationModal();
   };
 
-  const handleDocumentSelect = (documentId: number) => {
-    setCurrentDocumentId(documentId);
-    window.history.pushState({}, "", `/document/${documentId}`);
+  const handleDocumentSelect = (id: number | string) => {
+    console.log("[Home Page] handleDocumentSelect: Received id:", id, "Type:", typeof id);
+    let numericId = null;
+    if (id !== undefined && id !== null) {
+      const parsedId = Number(id);
+      if (!isNaN(parsedId)) {
+        numericId = parsedId;
+      } else {
+        console.warn("[Home Page] handleDocumentSelect: Failed to parse id:", id);
+      }
+    }
+    setCurrentDocumentId(numericId);
+    if (numericId !== null) {
+      navigate(`/document/${numericId}`);
+    } else {
+      // Optionally navigate to a neutral page or show an error if selection should always yield a valid ID
+      // navigate("/");
+    }
   };
 
-  const handleAnnotationSelect = (documentId: number, startOffset?: number) => {
-    setCurrentDocumentId(documentId);
-    window.history.pushState({}, "", `/document/${documentId}`);
-    
-    // If we have a startOffset, jump to that annotation after a short delay
+  const handleAnnotationSelect = (docId: number | string, startOffset?: number) => {
+    console.log("[Home Page] handleAnnotationSelect: Received document id:", docId, "Type:", typeof docId);
+    let numericDocId = null;
+    if (docId !== undefined && docId !== null) {
+      const parsedId = Number(docId);
+      if (!isNaN(parsedId)) {
+        numericDocId = parsedId;
+      } else {
+        console.warn("[Home Page] handleAnnotationSelect: Failed to parse item.documentId:", docId);
+      }
+    }
+    setCurrentDocumentId(numericDocId);
+
+    if (numericDocId !== null) {
+      navigate(`/document/${numericDocId}`);
+      // If we have a startOffset, jump to that annotation after a short delay
+      if (startOffset !== undefined) {
+        setTimeout(() => {
+          handleJumpToAnnotation(startOffset);
+        }, 100);
+      }
+    } else {
+      // Optionally navigate to a neutral page or show an error
+      // navigate("/");
+    }
+  };
     if (startOffset !== undefined) {
       setTimeout(() => {
         handleJumpToAnnotation(startOffset);
@@ -289,10 +378,15 @@ export default function Home() {
         {/* Document Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Document Viewer */}
-          <DocumentViewer
-            documentId={currentDocumentId}
-            onTextSelection={handleTextSelection}
-          />
+        { (() => {
+            console.log("[Home Page] Rendering DocumentViewer with documentId:", currentDocumentId, "Type:", typeof currentDocumentId);
+            return (
+              <DocumentViewer
+                documentId={currentDocumentId}
+                onTextSelection={handleTextSelection}
+              />
+            );
+          })() }
 
           {/* Annotation Panel */}
           {currentDocumentId && (

@@ -14,6 +14,28 @@ interface DocumentViewerProps {
 }
 
 export default function DocumentViewer({ documentId, onTextSelection }: DocumentViewerProps) {
+  // Existing console log for documentId (from previous steps, will be captured by the one inside the component if it proceeds)
+  // console.log("DocumentViewer: Rendering. documentId:", documentId); // This was the user's reference
+
+  // NEW: Add guard for invalid documentId
+  if (typeof documentId !== 'number' || isNaN(documentId)) {
+    // The console.log just below this (inside the component) will capture the invalid ID as well.
+    // This specific warning is for when the component decides to bail out.
+    console.warn("DocumentViewer: Invalid documentId received:", documentId, ". Rendering 'No Document Selected' state.");
+    return (
+      <div className="flex-1 flex items-center justify-center bg-surface">
+        <div className="text-center">
+          <h2 className="text-lg font-medium text-muted-foreground mb-2">
+            No Document Selected (Invalid ID)
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            The document ID provided is not valid.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
   const [contextMenu, setContextMenu] = useState<{
@@ -212,7 +234,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     );
   }
 
-  if (isLoading) {
+  if (isLoadingMetadata) {
     return (
       <div className="flex-1 flex items-center justify-center bg-surface">
         <div className="text-center">
