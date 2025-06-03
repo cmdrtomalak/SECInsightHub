@@ -142,69 +142,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+import { type InsertDocument } from "@shared/schema"; // Ensure this is at the top with other imports
+
+// ... other routes ...
+
   app.post("/api/documents", async (req, res) => {
     try {
       const incomingData = req.body;
 
-      // Check for essential content first
-      if (!incomingData.content || typeof incomingData.content !== 'string' || incomingData.content.trim() === '') {
-        return res.status(400).json({ error: "Document content is missing or invalid." });
-      }
-      const fullContent: string = incomingData.content;
-
-      // Prepare metadata for validation.
-      const metadataToValidate = {
-        companyId: incomingData.companyId,
-        accessionNumber: incomingData.accessionNumber,
-        formType: incomingData.formType,
-        filingDate: incomingData.filingDate,
-        reportDate: incomingData.reportDate,
-        documentUrl: incomingData.documentUrl,
-        title: incomingData.title,
-      };
-
-      // Validate the core metadata
-      const validatedCoreMetadata = insertDocumentSchema.pick({
+      // 1. Validate incoming metadata
+      // insertDocumentSchema includes `documentUrl` as `text("document_url").notNull()`.
+      // `content` and `totalPages` are optional or have defaults in insertDocumentSchema.
+      const importRequestSchema = insertDocumentSchema.pick({
         companyId: true,
         accessionNumber: true,
         formType: true,
         filingDate: true,
         documentUrl: true,
         title: true,
-        reportDate: true
-      }).parse(metadataToValidate);
+        reportDate: true // reportDate is optional (text or null)
+      });
 
+      const validatedData = importRequestSchema.parse(incomingData);
+
+      // 2. Fetch content from SEC using validatedData.documentUrl
+      let fullContent: string;
+      try {
+        console.log(`[Server] POST /api/documents: Fetching content from SEC URL: ${validatedData.documentUrl}`);
+        const secFetchResponse = await fetch(validatedData.documentUrl, {
+          headers: { 'User-Agent': 'SEC Document Analyzer contact@example.com' },
+        });
+        if (!secFetchResponse.ok) {
+          console.error(`[Server] POST /api/documents: Failed to fetch from SEC. Status: ${secFetchResponse.status}, URL: ${validatedData.documentUrl}`);
+          return res.status(502).json({ error: "Failed to fetch document content from SEC.", sec_status: secFetchResponse.status });
+        }
+        fullContent = await secFetchResponse.text();
+        console.log(`[Server] POST /api/documents: Successfully fetched content from SEC. Length: ${fullContent.length}`);
+      } catch (fetchError) {
+        console.error(`[Server] POST /api/documents: Network or other error fetching from SEC URL: ${validatedData.documentUrl}`, fetchError);
+        return res.status(503).json({ error: "Service unavailable: Error fetching document from SEC." });
+      }
+
+      if (!fullContent || fullContent.trim() === '') {
+        // This case might indicate an issue with the SEC document itself (e.g., it's empty)
+        // or an unexpected response from SEC that wasn't caught by !secFetchResponse.ok
+        console.warn(`[Server] POST /api/documents: Fetched document content from SEC is empty. URL: ${validatedData.documentUrl}`);
+        return res.status(400).json({ error: "Fetched document content from SEC is empty or invalid." });
+      }
+
+      // 3. Create initial document entry (metadata only)
       const documentToCreate: InsertDocument = {
-        ...validatedCoreMetadata,
-        content: null,
-        totalPages: 0,
+        companyId: validatedData.companyId,
+        accessionNumber: validatedData.accessionNumber,
+        formType: validatedData.formType,
+        filingDate: validatedData.filingDate,
+        reportDate: validatedData.reportDate, // Will be null if not provided, as per schema
+        documentUrl: validatedData.documentUrl,
+        title: validatedData.title,
+        content: null, // Content will be chunked
+        totalPages: 0, // Will be updated by updateDocumentContent
       };
-
       const newDocumentMetadata = await storage.createDocument(documentToCreate);
       console.log(`[Server] POST /api/documents: Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
 
-      // Now, process the content (chunking, updating totalPages, etc.)
+      // 4. Process content (chunking)
       await storage.updateDocumentContent(newDocumentMetadata.id, fullContent);
       console.log(`[Server] POST /api/documents: Finished chunking for doc ID: ${newDocumentMetadata.id}`);
 
-      // Fetch the final document state to return to client
       const finalDocument = await storage.getDocument(newDocumentMetadata.id);
-
       if (!finalDocument) {
         console.error("[Server] POST /api/documents: Critical error - Failed to retrieve document immediately after creation/update for ID:", newDocumentMetadata.id);
         return res.status(500).json({ error: "Internal server error: Failed to retrieve document after import." });
       }
-
       console.log(`[Server] POST /api/documents: Successfully created and chunked document ID: ${finalDocument.id}, Total Pages: ${finalDocument.totalPages}`);
       res.status(201).json(finalDocument);
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error("[Server] POST /api/documents: Zod validation error:", error.flatten().fieldErrors);
-        return res.status(400).json({ error: "Invalid document data provided.", details: error.flatten().fieldErrors });
+        console.error("[Server] POST /api/documents: Zod validation error for incoming metadata:", error.flatten().fieldErrors);
+        return res.status(400).json({ error: "Invalid metadata provided for import.", details: error.flatten().fieldErrors });
       } else {
-        console.error("[Server] POST /api/documents: Non-Zod error creating document:", error);
-        return res.status(500).json({ error: "Failed to create document due to an unexpected internal server error." });
+        console.error("[Server] POST /api/documents: General error during import:", error);
+        return res.status(500).json({ error: "Failed to import document due to an unexpected internal server error." });
       }
     }
   });

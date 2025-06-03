@@ -90,38 +90,24 @@ export default function Home() {
 
       if (!latest10K) throw new Error("No 10-K found for Apple");
 
-      // Fetch document content
-      const documentUrl = `https://www.sec.gov/Archives/edgar/data/0000320193/${latest10K.accessionNumber.replace(/-/g, '')}/${latest10K.primaryDocument}`;
-      const contentResponse = await fetch(`/api/sec/document?url=${encodeURIComponent(documentUrl)}`);
-      let contentHtml = "<p>(Content retrieval failed or was empty)</p>"; // Default HTML placeholder
+      // Construct the direct SEC document URL
+      const documentUrl = `https://www.sec.gov/Archives/edgar/data/${appleCompany.cik.replace(/^0+/, '')}/${latest10K.accessionNumber.replace(/-/g, '')}/${latest10K.primaryDocument}`;
+      console.log("[Home Page] createAppleDocumentMutation: Constructed SEC document URL:", documentUrl);
       
-      if (contentResponse.ok) {
-        try {
-          const contentData = await contentResponse.json();
-          // Ensure contentData.content is a non-empty string, otherwise use the placeholder
-          if (contentData && typeof contentData.content === 'string' && contentData.content.trim() !== '') {
-            contentHtml = contentData.content;
-          }
-        } catch (e) {
-          // Error parsing JSON, or other issue, stick with default placeholder
-          console.error("Error processing contentResponse JSON:", e);
-        }
-      }
-
-      // Create document
-      const documentData = {
+      // Prepare metadata payload for the server. Content will be fetched by the server.
+      const documentMetadataPayload = {
         companyId: appleCompany.id,
         accessionNumber: latest10K.accessionNumber,
         formType: latest10K.form,
         filingDate: latest10K.filingDate,
-        reportDate: latest10K.reportDate || latest10K.filingDate,
-        documentUrl: documentUrl,
+        reportDate: latest10K.reportDate || latest10K.filingDate, // Ensure reportDate has a fallback
+        documentUrl: documentUrl, // Server will use this to fetch content
         title: `Apple Inc. ${latest10K.form} - ${latest10K.filingDate}`,
-        content: contentHtml, // Use the new variable
-        totalPages: null, // Changed to null
+        // No 'content' or 'totalPages' field sent from client
       };
 
-      return await apiRequest("POST", "/api/documents", documentData);
+      console.log("[Home Page] createAppleDocumentMutation: Sending metadata payload to POST /api/documents:", documentMetadataPayload);
+      return await apiRequest("POST", "/api/documents", documentMetadataPayload);
     },
     onSuccess: (newDocument: any) => {
       console.log("[Home Page] createAppleDocumentMutation.onSuccess: newDocument.id:", newDocument.id, "Type:", typeof newDocument.id);
