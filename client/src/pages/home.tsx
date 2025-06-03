@@ -283,7 +283,7 @@ export default function Home() {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           currentDocumentId={currentDocumentId}
-          onOpenAnnotationModal={() => handleOpenAnnotationModal()} // For new, context-less annotation from toolbar
+          // onOpenAnnotationModal prop removed
         />
 
         {/* Document Content */}
