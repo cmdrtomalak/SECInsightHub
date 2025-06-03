@@ -92,19 +92,19 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   // Effect to fetch current page content
   useEffect(() => {
-    if (documentId && documentMetadata) { // Ensure metadata (and thus totalPages) is loaded
+    if (documentId && documentMetadata) {
       setIsPageLoading(true);
-      setCurrentPageContent(null); // Clear previous page content
+      setCurrentPageContent(null);
       console.log(`DocumentViewer: Fetching page ${currentPage} for document ${documentId}`);
       getSECDocumentPage(documentId, currentPage)
         .then(chunk => {
           if (chunk) {
             console.log(`DocumentViewer: Received page ${currentPage} content. Length: ${chunk.content.length}`);
             setCurrentPageContent(chunk.content);
-            // If there's a pending scroll, execute it now that content is loaded
             if (pendingScrollOffset !== null) {
+              console.log(`[DocumentViewer pendingScrollEffect] Pending scroll detected. Global offset: ${pendingScrollOffset}, Current page: ${currentPage}. Calling scrollToOffset.`);
               const localOffsetForScroll = pendingScrollOffset % DEFAULT_CHUNK_SIZE;
-              scrollToOffset(pendingScrollOffset, localOffsetForScroll); // Pass global for element query, local for fallback
+              scrollToOffset(pendingScrollOffset, localOffsetForScroll);
               setPendingScrollOffset(null);
             }
           } else {
@@ -171,9 +171,11 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   // Helper function for scrolling to an offset
   const scrollToOffset = (globalStartOffset: number, localOffsetToScroll: number) => {
+    console.log(`[DocumentViewer scrollToOffset] Called with globalStartOffset: ${globalStartOffset}, localOffsetToScroll: ${localOffsetToScroll}`);
     if (contentRef.current) {
-      const annotationElement = contentRef.current.querySelector(`[data-annotation-start="${globalStartOffset}"]`);
+      const annotationElement = contentRef.current.querySelector(`[data-annotation-start="${globalStartOffset}"]`) as HTMLElement;
       if (annotationElement) {
+        console.log("[DocumentViewer scrollToOffset] Annotation element found:", annotationElement);
         const scrollContainer = contentRef.current.closest('.overflow-y-auto');
         if (scrollContainer) {
           const containerRect = scrollContainer.getBoundingClientRect();
@@ -183,14 +185,21 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         } else {
           annotationElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-      } else if (currentPageContent) { // Fallback scrolling if element not found (e.g. annotation spans multiple pages)
-        const percentage = localOffsetToScroll / currentPageContent.length;
-        const scrollTop = contentRef.current.scrollHeight * percentage;
-        const scrollContainer = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
-        if (scrollContainer) {
-          scrollContainer.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
+      } else {
+        console.warn("[DocumentViewer scrollToOffset] Annotation element NOT found by querySelector. Using fallback percentage scroll.");
+        if (currentPageContent) { // Fallback scrolling
+          const percentage = localOffsetToScroll / currentPageContent.length;
+          const scrollTop = contentRef.current.scrollHeight * percentage;
+          const scrollContainer = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
+          if (scrollContainer) {
+            scrollContainer.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
+          }
+        } else {
+          console.warn("[DocumentViewer scrollToOffset] Fallback scroll failed: currentPageContent is null.");
         }
       }
+    } else {
+      console.warn("[DocumentViewer scrollToOffset] contentRef.current is null.");
     }
   };
 
@@ -224,30 +233,41 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   }, [contextMenu]); // Re-run this effect when the contextMenu state changes.
 
   useEffect(() => {
-    const handleJumpToAnnotation = (event: CustomEvent) => {
-      const { startOffset: globalStartOffset } = event.detail; // This is a global offset
-      if (!documentMetadata || !currentPageContent === undefined) return; // Not ready
+    const eventHandler = (event: CustomEvent) => { // Renamed to eventHandler to avoid confusion with the outer scope function name
+      const { startOffset: globalStartOffsetFromEvent } = event.detail;
+      console.log(`[DocumentViewer] Received 'jumpToAnnotation' window event. Global startOffset: ${globalStartOffsetFromEvent}`);
 
-      const targetPage = Math.floor(globalStartOffset / DEFAULT_CHUNK_SIZE) + 1;
+      if (!documentMetadata) {
+        console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot jump.");
+        return;
+      }
+      // It's okay if currentPageContent is not yet available for the target page,
+      // as pendingScrollOffset logic will handle scrolling after content load.
 
-      console.log(`DocumentViewer: handleJumpToAnnotation. GlobalOffset: ${globalStartOffset}, TargetPage: ${targetPage}, CurrentPage: ${currentPage}`);
+      console.log(`[DocumentViewer handleJumpToAnnotation] Called with globalStartOffset: ${globalStartOffsetFromEvent}`);
+      const targetPage = Math.floor(globalStartOffsetFromEvent / DEFAULT_CHUNK_SIZE) + 1;
+      const localOffsetForScroll = globalStartOffsetFromEvent % DEFAULT_CHUNK_SIZE;
+      console.log(`[DocumentViewer handleJumpToAnnotation] Calculated targetPage: ${targetPage}, localOffsetForScroll: ${localOffsetForScroll}, currentPage: ${currentPage}`);
 
       if (targetPage !== currentPage) {
-        setPendingScrollOffset(globalStartOffset); // Store the global offset
+        console.log(`[DocumentViewer handleJumpToAnnotation] Navigating to page ${targetPage}. Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
+        setPendingScrollOffset(globalStartOffsetFromEvent);
         setCurrentPage(targetPage);
-        // Scrolling will be handled by the useEffect that fetches page content
       } else {
-        // Already on the correct page, scroll directly
-        const localOffsetForScroll = globalStartOffset % DEFAULT_CHUNK_SIZE;
-        scrollToOffset(globalStartOffset, localOffsetForScroll);
+        console.log(`[DocumentViewer handleJumpToAnnotation] Already on target page ${currentPage}. Calling scrollToOffset directly.`);
+        scrollToOffset(globalStartOffsetFromEvent, localOffsetForScroll);
       }
     };
 
-    window.addEventListener('jumpToAnnotation', handleJumpToAnnotation as EventListener);
+    console.log("[DocumentViewer] Adding 'jumpToAnnotation' window event listener.");
+    window.addEventListener('jumpToAnnotation', eventHandler as EventListener);
     return () => {
-      window.removeEventListener('jumpToAnnotation', handleJumpToAnnotation as EventListener);
+      console.log("[DocumentViewer] Removing 'jumpToAnnotation' window event listener.");
+      window.removeEventListener('jumpToAnnotation', eventHandler as EventListener);
     };
-  }, []);
+    // Added documentMetadata to dependencies because it's used in the handler.
+    // currentPage is also used for comparison.
+  }, [documentMetadata, currentPage]);
 
   if (!documentId) {
     return (

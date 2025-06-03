@@ -199,6 +199,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
               key={annotation.id}
               className={`${getAnnotationColor(annotation.type, annotation.color || "orange")} cursor-pointer hover:shadow-md transition-shadow relative ${selectedAnnotationForAmend?.id === annotation.id ? 'ring-2 ring-primary ring-offset-1' : ''}`}
               onClick={() => {
+                console.log(`[AnnotationPanel] Clicked annotation ID ${annotation.id}, attempting to jump. Global startOffset: ${annotation.startOffset}`);
                 onJumpToAnnotation?.(annotation.startOffset);
                 setSelectedAnnotationForAmend(annotation);
               }}

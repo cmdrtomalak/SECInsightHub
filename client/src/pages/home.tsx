@@ -299,8 +299,9 @@ export default function Home() {
     }
   };
 
-  const handleJumpToAnnotation = (startOffset: number) => {
-    // Send message to document viewer to scroll to annotation
+  // Renamed this function to avoid confusion with DocumentViewer's internal handler
+  const handleJumpToAnnotationEventDispatch = (startOffset: number) => {
+    console.log(`[Home Page] Relaying jumpToAnnotation custom event for global offset: ${startOffset}`);
     const event = new CustomEvent('jumpToAnnotation', { detail: { startOffset } });
     window.dispatchEvent(event);
   };
@@ -371,7 +372,7 @@ export default function Home() {
             <AnnotationPanel
               documentId={currentDocumentId}
               onOpenAnnotationModal={handleOpenAnnotationModal} // Updated prop
-              onJumpToAnnotation={handleJumpToAnnotation}
+              onJumpToAnnotation={handleJumpToAnnotationEventDispatch}
             />
           )}
         </div>
