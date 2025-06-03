@@ -11,86 +11,112 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { Annotation } from "@shared/schema"; // Added Annotation type
+import { useEffect } from "react"; // Added useEffect
 
 interface AnnotationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  selectedText: string;
-  documentId: number | null;
-  selectionRange: {
+  onSave: (data: Partial<Annotation>, idToUpdate?: number) => void; // Modified onSave
+  selectedText: string; // Keep for new annotations
+  documentId: number | null; // Keep for new annotations
+  selectionRange: { // Keep for new annotations
     startOffset: number;
     endOffset: number;
   } | null;
+  annotationToEdit?: Annotation | null; // Added annotationToEdit
 }
 
 export default function AnnotationModal({
   open,
   onOpenChange,
-  selectedText,
+  onSave, // Added onSave
+  selectedText: initialSelectedText, // Renamed for clarity with annotationToEdit
   documentId,
   selectionRange,
+  annotationToEdit, // Added annotationToEdit
 }: AnnotationModalProps) {
-  const [annotationType, setAnnotationType] = useState<"highlight" | "note" | "bookmark">("highlight");
+  const [annotationType, setAnnotationType] = useState<Annotation['type']>("highlight");
   const [note, setNote] = useState("");
-  const [color, setColor] = useState("orange");
+  const [color, setColor] = useState<Annotation['color']>("orange");
+  const [currentSelectedText, setCurrentSelectedText] = useState(initialSelectedText); // For display
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const createAnnotationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/annotations", data);
-    },
-    onSuccess: () => {
-      if (documentId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/documents", documentId, "annotations"] });
+  // Effect to initialize/reset form when annotationToEdit or open status changes
+  useEffect(() => {
+    if (open) {
+      if (annotationToEdit) {
+        setNote(annotationToEdit.note || "");
+        setAnnotationType(annotationToEdit.type);
+        setColor(annotationToEdit.color || "orange"); // Default if color is null
+        setCurrentSelectedText(annotationToEdit.selectedText);
+      } else {
+        setNote("");
+        setAnnotationType("highlight");
+        setColor("orange");
+        setCurrentSelectedText(initialSelectedText);
       }
-      toast({
-        title: "Annotation created",
-        description: "Your annotation has been saved to the document.",
-      });
-      handleClose();
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create annotation. Please try again.",
-        variant: "destructive",
-      });
-    },
+    }
+  }, [annotationToEdit, open, initialSelectedText]);
+
+  // This existing mutation is for direct API call from modal.
+  // It will be bypassed by calling onSave prop instead.
+  // Consider removing if onSave handles all mutation logic externally.
+  const internalMutationHook = useMutation({ // Renamed to avoid confusion
+    mutationFn: async (data: any) => { /* ... existing mutationFn ... */ },
+    onSuccess: () => { /* ... existing onSuccess ... */ },
+    onError: () => { /* ... existing onError ... */ },
   });
 
+
   const handleSubmit = () => {
-    if (!documentId || !selectionRange || !selectedText.trim()) {
-      toast({
-        title: "Error",
-        description: "Please select some text first.",
-        variant: "destructive",
-      });
-      return;
+    if (annotationToEdit) {
+      // Update existing annotation
+      const dataToSave: Partial<Annotation> = {
+        note: note.trim(),
+        type: annotationType,
+        color: annotationType === 'highlight' ? color : (annotationToEdit.type === 'highlight' ? annotationToEdit.color : 'orange'), // Preserve original highlight color if type not changed from highlight
+      };
+      onSave(dataToSave, annotationToEdit.id);
+    } else {
+      // Create new annotation
+      if (!documentId || !selectionRange || !currentSelectedText.trim()) {
+        toast({
+          title: "Error",
+          description: "Cannot create annotation. Missing document context or selected text.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const dataToSave: Partial<Annotation> = {
+        documentId,
+        type: annotationType,
+        selectedText: currentSelectedText.trim(),
+        note: annotationType === 'note' ? note.trim() : (note.trim() || null),
+        color: annotationType === 'highlight' ? color : 'orange',
+        pageNumber: 1, // TODO: Needs to be properly determined
+        startOffset: selectionRange.startOffset,
+        endOffset: selectionRange.endOffset,
+      };
+      onSave(dataToSave);
     }
-
-    const payload = {
-      documentId,
-      type: annotationType,
-      selectedText: selectedText.trim(),
-      note: annotationType === 'note' ? note.trim() : (note.trim() || null),
-      color: annotationType === 'highlight' ? color : 'orange', // If highlight, use selected color, else default to orange
-      pageNumber: 1, // TODO: Calculate actual page number
-      startOffset: selectionRange.startOffset,
-      endOffset: selectionRange.endOffset,
-    };
-
-    createAnnotationMutation.mutate(payload);
+    handleClose(); // Close modal after save attempt
   };
 
   const handleClose = () => {
-    setNote("");
-    setAnnotationType("highlight");
-    setColor("orange");
+    // Reset state for 'new' annotation scenario, useEffect will handle for 'edit' if re-opened
+    if (!annotationToEdit) {
+        setNote("");
+        setAnnotationType("highlight");
+        setColor("orange");
+        setCurrentSelectedText(""); // Reset selected text if it was for a new one
+    }
     onOpenChange(false);
   };
 
-  const getTypeButtonClass = (type: string) => {
+  const getTypeButtonClass = (type: Annotation['type']) => {
     const baseClass = "px-3 py-2 text-sm rounded transition-colors";
     switch (type) {
       case "highlight":
@@ -110,18 +136,22 @@ export default function AnnotationModal({
     }
   };
 
+  const isEditing = !!annotationToEdit;
+  const modalTitle = isEditing ? "Edit Annotation" : "Add Annotation";
+  const saveButtonText = isEditing ? "Update Annotation" : "Save Annotation";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}> {/* Ensure handleClose is used for onOpenChange */}
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Annotation</DialogTitle>
+          <DialogTitle>{modalTitle}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
             <Label className="text-sm font-medium text-foreground">Selected Text</Label>
-            <div className="mt-2 p-3 bg-muted rounded border text-sm">
-              {selectedText || "No text selected"}
+            <div className="mt-2 p-3 bg-muted rounded border text-sm max-h-20 overflow-y-auto">
+              {currentSelectedText || "No text selected"}
             </div>
           </div>
 
@@ -177,10 +207,11 @@ export default function AnnotationModal({
           )}
 
           <div>
-            <Label className="text-sm font-medium text-foreground">
+            <Label htmlFor="annotation-note-textarea" className="text-sm font-medium text-foreground">
               Note {annotationType !== "note" && "(Optional)"}
             </Label>
             <Textarea
+              id="annotation-note-textarea"
               className="mt-2 resize-none"
               rows={3}
               placeholder="Add your note here..."
@@ -194,10 +225,11 @@ export default function AnnotationModal({
           <div className="flex space-x-3 pt-4">
             <Button
               onClick={handleSubmit}
-              disabled={createAnnotationMutation.isPending || !selectedText.trim()}
+              // Disable button if trying to create new but no text, or if internal hook is pending (if used)
+              disabled={(isEditing ? false : !currentSelectedText.trim()) || internalMutationHook.isPending}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium"
             >
-              {createAnnotationMutation.isPending ? "Saving..." : "Save Annotation"}
+              {internalMutationHook.isPending ? "Saving..." : saveButtonText}
             </Button>
             <Button variant="outline" onClick={handleClose} className="border-gray-300 text-gray-700 hover:bg-gray-50">
               Cancel

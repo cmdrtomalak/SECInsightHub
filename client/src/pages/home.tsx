@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // Added useQueryClient
+import type { Annotation } from "@shared/schema"; // Added Annotation type
 import CompanySearch from "@/components/company-search";
 import RecentDocuments from "@/components/recent-documents";
 import AnnotationSearch from "@/components/annotation-search";
@@ -16,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function Home() {
   const params = useParams();
   const { toast } = useToast();
+  const queryClient = useQueryClient(); // Added queryClient
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentDocumentId, setCurrentDocumentId] = useState<number | null>(
     params.id ? parseInt(params.id) : null
@@ -27,6 +29,7 @@ export default function Home() {
     endOffset: number;
   } | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null); // Added editingAnnotation state
 
   // Check if we have any documents and load Apple 10-K by default
   const { data: recentDocuments = [] } = useQuery({
@@ -142,10 +145,74 @@ export default function Home() {
     }
   }, [recentDocuments, hasInitialized, currentDocumentId, params.id]);
 
+  // --- Annotation Modal Logic ---
+  const handleOpenAnnotationModal = (annotation?: Annotation) => {
+    if (annotation) {
+      setEditingAnnotation(annotation);
+      setSelectedText(annotation.selectedText);
+    } else {
+      setEditingAnnotation(null);
+      // For new annotations via text selection, selectedText is already set.
+      // If opening for a "blank" new annotation (e.g. from a toolbar button without prior selection),
+      // ensure selectedText and selectionRange are appropriately cleared or handled.
+      // setSelectedText(""); // This might be needed if TopToolbar can open for a truly new one without text selection
+      // setSelectionRange(null);
+    }
+    setAnnotationModalOpen(true);
+  };
+
+  const saveAnnotationMutation = useMutation({
+    mutationFn: async ({ data, idToUpdate }: { data: Partial<Annotation>, idToUpdate?: number }) => {
+      if (idToUpdate) {
+        return apiRequest("PATCH", `/api/annotations/${idToUpdate}`, data);
+      } else {
+        // Ensure all required fields for new annotation are present in data
+        if (!data.documentId || !data.selectedText || data.startOffset === undefined || data.endOffset === undefined) {
+          throw new Error("Missing required fields for new annotation.");
+        }
+        return apiRequest("POST", "/api/annotations", data);
+      }
+    },
+    onSuccess: (_result: any, { idToUpdate }: { data: Partial<Annotation>, idToUpdate?: number }) => {
+      toast({
+        title: idToUpdate ? "Annotation Updated" : "Annotation Saved",
+        description: idToUpdate ? "Your changes have been saved." : "The annotation has been added to the document.",
+      });
+      if (currentDocumentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/documents", currentDocumentId, "annotations"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/annotations/search"] }); // For annotation search component
+    },
+    onError: (error: Error, { idToUpdate }: { data: Partial<Annotation>, idToUpdate?: number }) => {
+      toast({
+        title: "Error",
+        description: `Failed to ${idToUpdate ? 'update' : 'save'} annotation. ${error.message || ''}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveAnnotation = (data: Partial<Annotation>, idToUpdate?: number) => {
+    // If creating new, ensure documentId, selectedText, and offsets are included from the current state
+    // as the modal might only send back note, type, color.
+    if (!idToUpdate) {
+      data = {
+        ...data,
+        documentId: currentDocumentId,
+        selectedText: selectedText, // This is from onTextSelection
+        startOffset: selectionRange?.startOffset,
+        endOffset: selectionRange?.endOffset,
+        pageNumber: 1, // Still TODO: pageNumber determination
+      };
+    }
+    saveAnnotationMutation.mutate({ data, idToUpdate });
+  };
+
   const handleTextSelection = (text: string, startOffset: number, endOffset: number) => {
     setSelectedText(text);
     setSelectionRange({ startOffset, endOffset });
-    setAnnotationModalOpen(true);
+    setEditingAnnotation(null);
+    handleOpenAnnotationModal();
   };
 
   const handleDocumentSelect = (documentId: number) => {
@@ -216,7 +283,7 @@ export default function Home() {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           currentDocumentId={currentDocumentId}
-          onOpenAnnotationModal={() => setAnnotationModalOpen(true)}
+          // onOpenAnnotationModal prop removed
         />
 
         {/* Document Content */}
@@ -231,7 +298,7 @@ export default function Home() {
           {currentDocumentId && (
             <AnnotationPanel
               documentId={currentDocumentId}
-              onOpenAnnotationModal={() => setAnnotationModalOpen(true)}
+              onOpenAnnotationModal={handleOpenAnnotationModal} // Updated prop
               onJumpToAnnotation={handleJumpToAnnotation}
             />
           )}
@@ -242,9 +309,11 @@ export default function Home() {
       <AnnotationModal
         open={annotationModalOpen}
         onOpenChange={setAnnotationModalOpen}
-        selectedText={selectedText}
+        selectedText={selectedText} // Still needed for new annotations from text selection
         documentId={currentDocumentId}
         selectionRange={selectionRange}
+        annotationToEdit={editingAnnotation} // Pass the editing annotation
+        onSave={handleSaveAnnotation} // Pass the save handler
       />
     </div>
   );

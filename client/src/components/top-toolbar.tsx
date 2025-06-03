@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
-  Highlighter,
-  StickyNote,
-  Bookmark,
+  // Highlighter, // Removed
+  // StickyNote, // Removed
+  // Bookmark, // Removed
   Search,
   Download,
   Printer,
@@ -14,14 +14,14 @@ interface TopToolbarProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   currentDocumentId: number | null;
-  onOpenAnnotationModal: () => void;
+  // onOpenAnnotationModal: () => void; // Removed
 }
 
 export default function TopToolbar({
   sidebarCollapsed,
   onToggleSidebar,
   currentDocumentId,
-  onOpenAnnotationModal,
+  // onOpenAnnotationModal, // Removed
 }: TopToolbarProps) {
   const { data: document } = useQuery({
     queryKey: ["/api/documents", currentDocumentId],
@@ -78,36 +78,7 @@ export default function TopToolbar({
         {/* Annotation Tools */}
         {currentDocumentId && (
           <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1 bg-muted rounded-lg p-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:bg-orange-500 hover:text-white transition-colors"
-                title="Highlight"
-                onClick={onOpenAnnotationModal}
-              >
-                <Highlighter className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:bg-pink-500 hover:text-white transition-colors"
-                title="Add Note"
-                onClick={onOpenAnnotationModal}
-              >
-                <StickyNote className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:bg-green-500 hover:text-white transition-colors"
-                title="Bookmark"
-                onClick={onOpenAnnotationModal}
-              >
-                <Bookmark className="h-4 w-4" />
-              </Button>
-            </div>
-
+            {/* Removed Annotation Type Button Group */}
             <div className="border-l border-border pl-2 ml-2 flex items-center space-x-2">
               <Button
                 variant="ghost"

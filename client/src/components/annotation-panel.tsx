@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Plus, Edit, Trash2, X, ChevronRight } from "lucide-react";
@@ -5,10 +6,11 @@ import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import type { Annotation } from "@shared/schema";
 
 interface AnnotationPanelProps {
   documentId: number;
-  onOpenAnnotationModal: () => void;
+  onOpenAnnotationModal: (annotationToEdit?: Annotation) => void;
   onJumpToAnnotation?: (startOffset: number) => void;
 }
 
@@ -16,6 +18,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [selectedAnnotationForAmend, setSelectedAnnotationForAmend] = useState<Annotation | null>(null);
 
   const { data: annotations = [], isLoading } = useQuery({
     queryKey: ["/api/documents", documentId, "annotations"],
@@ -157,17 +160,20 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
             </p>
           </div>
         ) : (
-          annotations.map((annotation: any) => (
-            <div 
-              key={annotation.id} 
-              className={`${getAnnotationColor(annotation.type, annotation.color)} cursor-pointer hover:shadow-md transition-shadow`}
-              onClick={() => onJumpToAnnotation?.(annotation.startOffset)}
+          annotations.map((annotation: Annotation) => (
+            <div
+              key={annotation.id}
+              className={`${getAnnotationColor(annotation.type, annotation.color || "orange")} cursor-pointer hover:shadow-md transition-shadow relative ${selectedAnnotationForAmend?.id === annotation.id ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+              onClick={() => {
+                onJumpToAnnotation?.(annotation.startOffset);
+                setSelectedAnnotationForAmend(annotation);
+              }}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className={`text-xs font-medium px-2 py-1 rounded ${getTypeColor(annotation.type)}`}>
                   {annotation.type.charAt(0).toUpperCase() + annotation.type.slice(1)}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   Page {annotation.pageNumber}
                 </span>
               </div>
@@ -177,20 +183,20 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
               </p>
               
               {annotation.note && (
-                <div className="bg-white rounded p-2 mb-2">
+                <div className="bg-white rounded p-2 mb-2 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">{annotation.note}</p>
                 </div>
               )}
               
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(annotation.createdAt), { addSuffix: true })}
+                <span className="text-xs text-gray-600 dark:text-gray-400">
+                  {annotation.createdAt ? formatDistanceToNow(new Date(annotation.createdAt), { addSuffix: true }) : "Date N/A"}
                 </span>
                 <div className="flex space-x-1">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteAnnotationMutation.mutate(annotation.id);
@@ -207,9 +213,23 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
       </div>
 
       {/* Add New Annotation */}
-      <div className="p-4 border-t border-border bg-muted">
+      <div className="p-4 border-t border-border bg-muted space-y-2">
+        {selectedAnnotationForAmend && (
+          <Button
+            onClick={() => {
+              if (selectedAnnotationForAmend) {
+                onOpenAnnotationModal(selectedAnnotationForAmend);
+              }
+            }}
+            className="w-full"
+            variant="outline"
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Amend Selected Annotation
+          </Button>
+        )}
         <Button
-          onClick={onOpenAnnotationModal}
+          onClick={() => onOpenAnnotationModal()}
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center"
         >
           <Plus className="w-4 h-4 mr-2" />
