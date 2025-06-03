@@ -101,11 +101,23 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           if (chunk) {
             console.log(`DocumentViewer: Received page ${currentPage} content. Length: ${chunk.content.length}`);
             setCurrentPageContent(chunk.content);
+            // If there's a pending scroll, execute it now that content is loaded
             if (pendingScrollOffset !== null) {
-              console.log(`[DocumentViewer pendingScrollEffect] Pending scroll detected. Global offset: ${pendingScrollOffset}, Current page: ${currentPage}. Calling scrollToOffset.`);
-              const localOffsetForScroll = pendingScrollOffset % DEFAULT_CHUNK_SIZE;
-              scrollToOffset(pendingScrollOffset, localOffsetForScroll);
-              setPendingScrollOffset(null);
+              const targetPageForPendingScroll = Math.floor(pendingScrollOffset / DEFAULT_CHUNK_SIZE) + 1;
+              if (currentPage === targetPageForPendingScroll) {
+                console.log(`[DocumentViewer pendingScrollEffect] Current page ${currentPage} matches target page for pending scroll. Attempting scroll.`);
+                const localOffsetToScroll = pendingScrollOffset % DEFAULT_CHUNK_SIZE;
+
+                setTimeout(() => {
+                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Now calling scrollToOffset for global offset ${pendingScrollOffset}`);
+                  scrollToOffset(pendingScrollOffset, localOffsetToScroll);
+                  setPendingScrollOffset(null); // Clear pending offset after attempting scroll
+                }, 50);
+
+              } else {
+                console.log(`[DocumentViewer pendingScrollEffect] Current page ${currentPage} does NOT match target page ${targetPageForPendingScroll} for pending scroll ${pendingScrollOffset}. This should ideally not happen if page navigation was successful. Clearing pending offset.`);
+                setPendingScrollOffset(null); // Clear if pages don't match to prevent stale scrolls
+              }
             }
           } else {
             console.warn(`DocumentViewer: No content received for page ${currentPage}, document ${documentId}.`);
