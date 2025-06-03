@@ -197,5 +197,41 @@ describe('AnnotationPanel', () => {
         variant: "destructive",
       }));
     });
+
+    it('allows selecting an annotation for amendment and opens modal with its data', () => {
+      const mockOpenModalFn = jest.fn();
+      // Ensure the panel is rendered with the mockOpenModalFn for this test
+      render(
+        <AnnotationPanel
+          documentId={mockProps.documentId}
+          onOpenAnnotationModal={mockOpenModalFn} // Use the specific mock for this test
+          onJumpToAnnotation={mockProps.onJumpToAnnotation}
+        />
+      );
+
+      // Find the first annotation item based on its selectedText content
+      // The parentElement.parentElement strategy depends on the DOM structure:
+      // text -> p -> div (note container) -> div (annotation card)
+      // or text -> p -> div (annotation card)
+      // Let's assume the note text is unique enough and is a child of the clickable card.
+      const firstAnnotationCard = screen.getByText(mockAnnotations[0].note!).closest('div[role="button"], div.cursor-pointer'); // Try to find the clickable card
+      expect(firstAnnotationCard).toBeInTheDocument();
+
+      // Click the first annotation item
+      fireEvent.click(firstAnnotationCard!);
+
+      // Verify visual selection (ring class)
+      // The class is `ring-2 ring-primary ring-offset-1`
+      expect(firstAnnotationCard).toHaveClass('ring-2', 'ring-primary');
+
+      // Verify "Amend Selected Annotation" button becomes visible and click it
+      const amendButton = screen.getByRole('button', { name: /Amend Selected Annotation/i });
+      expect(amendButton).toBeInTheDocument();
+      fireEvent.click(amendButton);
+
+      // Verify onOpenAnnotationModal was called with the correct annotation
+      expect(mockOpenModalFn).toHaveBeenCalledTimes(1);
+      expect(mockOpenModalFn).toHaveBeenCalledWith(mockAnnotations[0]);
+    });
   });
 });
