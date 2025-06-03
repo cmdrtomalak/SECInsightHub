@@ -45,8 +45,8 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   });
 
   console.log(
-    "DocumentViewer: Rendering. documentId:", documentId, 
-    "Annotations count:", annotations.length, 
+    "DocumentViewer: Rendering. documentId:", documentId,
+    "Annotations count:", annotations.length,
     "Last annotation:", annotations.length > 0 ? JSON.stringify(annotations[annotations.length - 1]) : "N/A",
     "Document content snippet (first 100):", document?.content?.substring(0,100) ?? "N/A"
   );
@@ -197,8 +197,17 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       typeof document.createTreeWalker !== 'function' ||
       typeof document.createRange !== 'function'
     ) {
-      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof document:", typeof document);
-      return content; 
+      let docDetails = "document is undefined";
+      if (typeof document !== 'undefined') {
+        docDetails = `constructor: ${document.constructor ? document.constructor.name : 'N/A'}, ` +
+                     `typeof createElement: ${typeof document.createElement}, ` +
+                     `typeof createTreeWalker: ${typeof document.createTreeWalker}, ` +
+                     `typeof createRange: ${typeof document.createRange}, ` +
+                     `keys.length: ${Object.keys(document).length}, ` +
+                     `first 20 keys: ${Object.keys(document).slice(0, 20).join(', ')}`;
+      }
+      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof document:", typeof document, "Details:", docDetails);
+      return content;
     } else {
       console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic.");
     }
@@ -269,12 +278,12 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
               spanElement.setAttribute('title', annotation.note);
             }
             console.log(`highlightText: Preparing span for ann ID ${annotation.id}: ${spanElement.outerHTML.split('>')[0] + ">"}`);
-            
+
             console.log("highlightText: Attempting range.surroundContents() for ann ID", annotation.id);
             range.surroundContents(spanElement); // Moves the original document content into the span.
             console.log("highlightText: surroundContents() successful for ann ID", annotation.id);
-            
-            // Add marker text AFTER the span if it's a 'note' type annotation 
+
+            // Add marker text AFTER the span if it's a 'note' type annotation
             // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
             // This part is specific to 'note' type, but a highlight can also be a note.
             const annotationMarkerText = annotation.note ? ' 📝' : ''; // Assuming a note implies a marker
