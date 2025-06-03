@@ -47,7 +47,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   console.log(
     "DocumentViewer: Rendering. documentId:", documentId,
     "Annotations count:", annotations.length,
-    "Last annotation:", annotations.length > 0 ? JSON.stringify(annotations[annotations.length - 1]) : "N/A",
+    "Last annotation ID:", annotations.length > 0 ? annotations[annotations.length - 1]?.id : "N/A",
     "Document content snippet (first 100):", document?.content?.substring(0,100) ?? "N/A"
   );
 
@@ -197,39 +197,30 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       typeof window.document.createTreeWalker !== 'function' ||
       typeof window.document.createRange !== 'function'
     ) {
-      let docDetails = "window.document is undefined";
-      if (typeof window.document !== 'undefined') { // Check window.document here
-        docDetails = `constructor: ${window.document.constructor ? window.document.constructor.name : 'N/A'}, ` +
-                     `typeof createElement: ${typeof window.document.createElement}, ` +
-                     `typeof createTreeWalker: ${typeof window.document.createTreeWalker}, ` +
-                     `typeof createRange: ${typeof window.document.createRange}, ` +
-                     `keys.length: ${Object.keys(window.document).length}, ` +
-                     `first 20 keys: ${Object.keys(window.document).slice(0, 20).join(', ')}`;
-      }
-      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof window.document:", typeof window.document, "Details:", docDetails);
+      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof window.document:", typeof window.document);
       return content;
     } else {
       console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic. typeof window.document:", typeof window.document);
     }
-    console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
+    // console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500)); // Removed
 
     const tempDiv = window.document.createElement('div');
     tempDiv.innerHTML = content;
 
     // Sort annotations by start offset in descending order
     const sortedAnnotations = [...annotations].sort((a, b) => b.startOffset - a.startOffset);
-    console.log("highlightText: Processing annotations:", JSON.parse(JSON.stringify(annotations)));
+    // console.log("highlightText: Processing annotations:", JSON.parse(JSON.stringify(annotations))); // Removed
 
 
     for (const annotation of sortedAnnotations) {
-      console.log("highlightText: Current annotation:", JSON.parse(JSON.stringify(annotation)));
-      console.log("highlightText: Checking type. Is 'highlight'?", annotation.type === 'highlight');
+      // console.log("highlightText: Current annotation:", JSON.parse(JSON.stringify(annotation))); // Removed
+      // console.log("highlightText: Checking type. Is 'highlight'?", annotation.type === 'highlight'); // Removed
 
       // Only proceed with DOM manipulation if it's a highlight type that requires span insertion.
       // Note markers are handled differently if they are not also highlights.
       if (annotation.type === 'highlight') {
         const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
-        console.log("highlightText: Color:", annotation.color, "Generated bgColorClass:", bgColorClass);
+        // console.log("highlightText: Color:", annotation.color, "Generated bgColorClass:", bgColorClass); // Removed
 
         const walker = window.document.createTreeWalker(
           tempDiv,
@@ -266,8 +257,8 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           try {
             range.setStart(startNode, startNodeOffset);
             range.setEnd(endNode, endNodeOffset);
-            console.log(`highlightText: Nodes found for ann ID ${annotation.id}. StartNode text (partial): '${startNode.textContent?.substring(startNodeOffset, startNodeOffset + 20)}', EndNode text (partial): '${endNode.textContent?.substring(endNodeOffset - 20, endNodeOffset)}'`);
-            console.log(`highlightText: Range to be highlighted: '${range.toString().substring(0, 100)}'`);
+            // console.log(`highlightText: Nodes found for ann ID ${annotation.id}. StartNode text (partial): '${startNode.textContent?.substring(startNodeOffset, startNodeOffset + 20)}', EndNode text (partial): '${endNode.textContent?.substring(endNodeOffset - 20, endNodeOffset)}'`); // Removed
+            // console.log(`highlightText: Range to be highlighted: '${range.toString().substring(0, 100)}'`); // Removed
 
             const spanElement = window.document.createElement('span');
             spanElement.className = "annotation-highlight"; // Base class
@@ -277,11 +268,11 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             if (annotation.note) {
               spanElement.setAttribute('title', annotation.note);
             }
-            console.log(`highlightText: Preparing span for ann ID ${annotation.id}: ${spanElement.outerHTML.split('>')[0] + ">"}`);
+            // console.log(`highlightText: Preparing span for ann ID ${annotation.id}: ${spanElement.outerHTML.split('>')[0] + ">"}`); // Removed
 
-            console.log("highlightText: Attempting range.surroundContents() for ann ID", annotation.id);
+            // console.log("highlightText: Attempting range.surroundContents() for ann ID", annotation.id); // Removed
             range.surroundContents(spanElement); // Moves the original document content into the span.
-            console.log("highlightText: surroundContents() successful for ann ID", annotation.id);
+            // console.log("highlightText: surroundContents() successful for ann ID", annotation.id); // Removed
 
             // Add marker text AFTER the span if it's a 'note' type annotation
             // and the spanElement has been successfully added to the DOM (i.e., spanElement.parentNode exists).
@@ -299,17 +290,12 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. StartOffset: ${annotation.startOffset}, EndOffset: ${annotation.endOffset}`);
         }
       } else if (annotation.type === 'note') {
-        // If it's a note but NOT a highlight, we might still want to place a marker.
-        // This part of the logic for non-highlight notes needs to be carefully considered
-        // if markers are desired for notes that don't also highlight text.
-        // For now, the marker logic is tied to the span created for highlights.
-        // If a note exists without a highlight, its marker won't be placed by current code.
-         console.log("highlightText: Annotation is of type 'note' but not 'highlight'. Marker logic for this case might need review if markers are desired without highlighting text.");
+        // console.log("highlightText: Annotation is of type 'note' but not 'highlight'. Marker logic for this case might need review if markers are desired without highlighting text."); // Removed
       } else {
-        console.log("highlightText: Annotation is NOT of type 'highlight' or 'note'. Type:", annotation.type);
+        // console.log("highlightText: Annotation is NOT of type 'highlight' or 'note'. Type:", annotation.type); // Removed
       }
     }
-    console.log("highlightText: Returning. Final innerHTML snippet (first 500):", tempDiv.innerHTML.substring(0, 500));
+    // console.log("highlightText: Returning. Final innerHTML snippet (first 500):", tempDiv.innerHTML.substring(0, 500)); // Removed
     return tempDiv.innerHTML;
   };
 

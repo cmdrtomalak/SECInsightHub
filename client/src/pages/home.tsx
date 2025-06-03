@@ -113,7 +113,6 @@ export default function Home() {
         totalPages: null, // Changed to null
       };
 
-      console.log("Submitting documentData to /api/documents:", JSON.stringify(documentData, null, 2));
       return await apiRequest("POST", "/api/documents", documentData);
     },
     onSuccess: (newDocument: any) => {
