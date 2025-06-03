@@ -360,6 +360,8 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
     const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
 
+    const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
+
     // Filter annotations for the current page and adjust their offsets
     const annotationsToDisplay = annotations
       .map(ann => ({
@@ -380,50 +382,62 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     console.log(`DocumentViewer: Highlighting. Page: ${currentPage}. Filtered ${annotationsToDisplay.length} annotations from ${annotations.length} total.`);
 
     for (const annotation of annotationsToDisplay) {
-      // Clamp localStart and localEnd to be within the bounds of the current page content
       const clampedLocalStart = Math.max(0, annotation.localStart);
       const clampedLocalEnd = Math.min(content.length, annotation.localEnd);
 
-      // If, after clamping, the annotation has no length or is entirely outside the current page's content, skip.
       if (clampedLocalStart >= clampedLocalEnd) {
-          console.log(`DocumentViewer: Skipping annotation ID ${annotation.id} as it has no visible part on page ${currentPage}. Original global: ${annotation.startOffset}-${annotation.endOffset}, Local: ${annotation.localStart}-${annotation.localEnd}, Clamped: ${clampedLocalStart}-${clampedLocalEnd}`);
-          continue;
+        console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}, Page ${currentPage}. Skipping as clampedLocalStart (${clampedLocalStart}) >= clampedLocalEnd (${clampedLocalEnd}). Original global: ${annotation.startOffset}-${annotation.endOffset}, Local: ${annotation.localStart}-${annotation.localEnd}.`);
+        continue;
       }
 
-      console.log(
-        "DocumentViewer: highlightText loop - PROCESSED annotation for current page:",
-        `ID: ${annotation.id}, Type: ${annotation.type}, GlobalStart: ${annotation.startOffset}, GlobalEnd: ${annotation.endOffset}, LocalStart: ${clampedLocalStart}, LocalEnd: ${clampedLocalEnd}`
+      console.log( // This is the existing "PROCESSED annotation" log, adjusted slightly
+        `[highlightText TreeWalker] Processing Ann ID ${annotation.id}, Page ${currentPage}. Global: ${annotation.startOffset}-${annotation.endOffset}. Seeking localStart: ${annotation.localStart} (clamped: ${clampedLocalStart}), localEnd: ${annotation.localEnd} (clamped: ${clampedLocalEnd}). Content length: ${content.length}`
       );
 
       if (isNaN(clampedLocalStart) || isNaN(clampedLocalEnd)) {
         console.warn(
-          "DocumentViewer: highlightText loop - NaN DETECTED IN CLAMPED LOCAL OFFSETS. Annotation ID:", annotation.id,
-          "LocalStart:", clampedLocalStart, "LocalEnd:", clampedLocalEnd
+          `[highlightText TreeWalker] Ann ID ${annotation.id}: NaN DETECTED IN CLAMPED LOCAL OFFSETS. LocalStart: ${clampedLocalStart}, LocalEnd: ${clampedLocalEnd}`
         );
-        continue; // Skip this annotation
+        continue;
       }
 
       if (annotation.type === 'highlight') {
         const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
         const walker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
-        let currentWalkerOffset = 0;
+        let currentWalkerOffset = 0; // Renamed from currentOffset for clarity within this scope
         let startNode: Text | null = null;
         let endNode: Text | null = null;
-        let startNodeOffsetInText = 0;
-        let endNodeOffsetInText = 0;
+        let startNodeOffsetInText = 0; // Renamed from startNodeOffset
+        let endNodeOffsetInText = 0;   // Renamed from endNodeOffset
 
         let currentNode;
         while (currentNode = walker.nextNode()) {
           const nodeText = currentNode.textContent || "";
           const nodeLength = nodeText.length;
 
+          console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Node type: ${currentNode.nodeType}, currentWalkerOffset: ${currentWalkerOffset}, nodeLength: ${nodeLength}, Node text (snippet): "${nodeText.substring(0, 50).replace(/\n/g, ' ')}"`);
+
+          if (startNode === null) {
+            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Checking for startNode. Condition: (${currentWalkerOffset} + ${nodeLength} > ${clampedLocalStart}) = ${currentWalkerOffset + nodeLength > clampedLocalStart}`);
+          }
           if (startNode === null && currentWalkerOffset + nodeLength > clampedLocalStart) {
             startNode = currentNode as Text;
             startNodeOffsetInText = clampedLocalStart - currentWalkerOffset;
+            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found startNode! startNodeOffsetInText: ${startNodeOffsetInText}. Node text: "${startNode.textContent?.substring(0,100).replace(/\n/g, ' ')}"`);
+          }
+
+          // Check endNode condition regardless of whether startNode is found yet, but only assign if endNode is still null.
+          // This helps in logging the condition check accurately.
+          if (endNode === null) {
+             console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Checking for endNode. Condition: (${currentWalkerOffset} + ${nodeLength} >= ${clampedLocalEnd}) = ${currentWalkerOffset + nodeLength >= clampedLocalEnd}`);
           }
           if (endNode === null && currentWalkerOffset + nodeLength >= clampedLocalEnd) {
             endNode = currentNode as Text;
             endNodeOffsetInText = clampedLocalEnd - currentWalkerOffset;
+            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode! endNodeOffsetInText: ${endNodeOffsetInText}. Node text: "${endNode.textContent?.substring(0,100).replace(/\n/g, ' ')}"`);
+            if (startNode === null) {
+              console.error(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode BUT startNode is still null! This is an error. ClampedLocalStart: ${clampedLocalStart}`);
+            }
             break;
           }
           currentWalkerOffset += nodeLength;
