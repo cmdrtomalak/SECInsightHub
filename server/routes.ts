@@ -142,64 +142,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-import { type InsertDocument } from "@shared/schema"; // Ensure InsertDocument type is available
-
-// ... (other routes remain the same) ...
-
   app.post("/api/documents", async (req, res) => {
     try {
       const incomingData = req.body;
 
-      if (!incomingData.content || typeof incomingData.content !== 'string') {
+      // Check for essential content first
+      if (!incomingData.content || typeof incomingData.content !== 'string' || incomingData.content.trim() === '') {
         return res.status(400).json({ error: "Document content is missing or invalid." });
       }
-      const fullContent = incomingData.content;
+      const fullContent: string = incomingData.content;
 
-      // Validate the metadata part using insertDocumentSchema, but temporarily remove content for validation
-      // as insertDocumentSchema expects content to be potentially null or a string, not absent.
-      const metadataToValidate = { ...incomingData };
-      delete metadataToValidate.content;
+      // Prepare metadata for validation.
+      const metadataToValidate = {
+        companyId: incomingData.companyId,
+        accessionNumber: incomingData.accessionNumber,
+        formType: incomingData.formType,
+        filingDate: incomingData.filingDate,
+        reportDate: incomingData.reportDate,
+        documentUrl: incomingData.documentUrl,
+        title: incomingData.title,
+      };
 
-      // This will throw if metadata is invalid (e.g. missing companyId, title etc.)
-      // We allow content to be null in the schema, so it's fine if it's not in metadataToValidate for this step.
-      const validatedMetadata = insertDocumentSchema.parse(metadataToValidate);
+      // Validate the core metadata
+      const validatedCoreMetadata = insertDocumentSchema.pick({
+        companyId: true,
+        accessionNumber: true,
+        formType: true,
+        filingDate: true,
+        documentUrl: true,
+        title: true,
+        reportDate: true
+      }).parse(metadataToValidate);
 
       const documentToCreate: InsertDocument = {
-        companyId: validatedMetadata.companyId,
-        accessionNumber: validatedMetadata.accessionNumber,
-        formType: validatedMetadata.formType,
-        filingDate: validatedMetadata.filingDate,
-        reportDate: validatedMetadata.reportDate,
-        documentUrl: validatedMetadata.documentUrl,
-        title: validatedMetadata.title,
-        content: null, // Explicitly set to null for initial creation
-        totalPages: 0, // Will be updated by chunking logic in updateDocumentContent
-        // lastAccessedAt and createdAt are handled by DB defaults
+        ...validatedCoreMetadata,
+        content: null,
+        totalPages: 0,
       };
 
       const newDocumentMetadata = await storage.createDocument(documentToCreate);
-      console.log(`[POST /api/documents] Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
+      console.log(`[Server] POST /api/documents: Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
 
-      // Use updateDocumentContent to handle chunking
+      // Now, process the content (chunking, updating totalPages, etc.)
       await storage.updateDocumentContent(newDocumentMetadata.id, fullContent);
-      console.log(`[POST /api/documents] Finished chunking and updating content for doc ID: ${newDocumentMetadata.id}`);
+      console.log(`[Server] POST /api/documents: Finished chunking for doc ID: ${newDocumentMetadata.id}`);
 
+      // Fetch the final document state to return to client
       const finalDocument = await storage.getDocument(newDocumentMetadata.id);
 
       if (!finalDocument) {
-        console.error("[POST /api/documents] Error fetching document immediately after creation/update:", newDocumentMetadata.id);
-        return res.status(500).json({ error: "Failed to retrieve document after import." });
+        console.error("[Server] POST /api/documents: Critical error - Failed to retrieve document immediately after creation/update for ID:", newDocumentMetadata.id);
+        return res.status(500).json({ error: "Internal server error: Failed to retrieve document after import." });
       }
-      console.log(`[POST /api/documents] Successfully created and chunked document ID: ${finalDocument.id}, Total Pages: ${finalDocument.totalPages}`);
+
+      console.log(`[Server] POST /api/documents: Successfully created and chunked document ID: ${finalDocument.id}, Total Pages: ${finalDocument.totalPages}`);
       res.status(201).json(finalDocument);
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-          console.error("[POST /api/documents] Validation error creating document:", error.errors);
-          return res.status(400).json({ error: "Invalid document data.", details: error.errors });
+        console.error("[Server] POST /api/documents: Zod validation error:", error.flatten().fieldErrors);
+        return res.status(400).json({ error: "Invalid document data provided.", details: error.flatten().fieldErrors });
+      } else {
+        console.error("[Server] POST /api/documents: Non-Zod error creating document:", error);
+        return res.status(500).json({ error: "Failed to create document due to an unexpected internal server error." });
       }
-      console.error("[POST /api/documents] Error creating document:", error);
-      res.status(500).json({ error: "Failed to create document." });
     }
   });
 
