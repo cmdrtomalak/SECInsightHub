@@ -46,6 +46,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     endOffset: number;
   } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null); // Create ref for context menu
   const [currentPageContent, setCurrentPageContent] = useState<string | null>(null);
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
   const [pendingScrollOffset, setPendingScrollOffset] = useState<number | null>(null);
@@ -196,20 +197,31 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   // Close context menu when clicking elsewhere
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenu) {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        // Clicked outside the context menu
+        console.log("[DocumentViewer] handleClickOutside: Clicked outside, closing context menu.");
         setContextMenu(null);
+      } else {
+        // Clicked inside the context menu or on the menu itself, do nothing.
+        console.log("[DocumentViewer] handleClickOutside: Clicked inside or on context menu, not closing.");
       }
     };
 
-    if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-      document.addEventListener('click', handleClickOutside);
-      return () => {
-        if (contextMenu && typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-          document.removeEventListener('click', handleClickOutside);
-        }
-      };
+    // Add listener if menu is open, remove if menu is closed or on cleanup.
+    if (contextMenu) {
+      console.log("[DocumentViewer] Adding mousedown listener for handleClickOutside.");
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      // Ensure listener is removed if contextMenu becomes null (e.g. by explicit cancel)
+      // This removal might be redundant due to the cleanup function, but good for clarity.
+      document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [contextMenu]);
+
+    return () => {
+      console.log("[DocumentViewer] Cleanup: Removing mousedown listener for handleClickOutside.");
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [contextMenu]); // Re-run this effect when the contextMenu state changes.
 
   useEffect(() => {
     const handleJumpToAnnotation = (event: CustomEvent) => {
@@ -552,26 +564,31 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         {/* Context Menu */}
         {contextMenu && (
           <div
+            ref={contextMenuRef} // Assign the ref here
             className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-2 min-w-48"
             style={{
               left: `${contextMenu.x}px`,
               top: `${contextMenu.y}px`,
             }}
-            onClick={(e) => e.stopPropagation()}
+            // Removed onClick={(e) => e.stopPropagation()}
           >
             <button
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
               onClick={() => {
+                // contextMenu.startOffset and .endOffset are already global due to setupTextSelection modification
+                console.log("[DocumentViewer] Annotate button clicked. Global offsets from contextMenu state:", contextMenu.startOffset, contextMenu.endOffset);
                 onTextSelection(contextMenu.selectedText, contextMenu.startOffset, contextMenu.endOffset);
-                setContextMenu(null);
+                setContextMenu(null); // Close menu after action
               }}
             >
-              <Highlighter className="h-4 w-4" />
               <span>Annotate</span>
             </button>
             <button
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
-              onClick={() => setContextMenu(null)}
+              onClick={() => {
+                console.log("[DocumentViewer] Cancel button clicked for context menu.");
+                setContextMenu(null);
+              }}
             >
               <span>Cancel</span>
             </button>
