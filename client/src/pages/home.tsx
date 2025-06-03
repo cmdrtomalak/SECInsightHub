@@ -85,11 +85,19 @@ export default function Home() {
       // Fetch document content
       const documentUrl = `https://www.sec.gov/Archives/edgar/data/0000320193/${latest10K.accessionNumber.replace(/-/g, '')}/${latest10K.primaryDocument}`;
       const contentResponse = await fetch(`/api/sec/document?url=${encodeURIComponent(documentUrl)}`);
-      let content = "Content not available";
+      let contentHtml = "<p>(Content retrieval failed or was empty)</p>"; // Default HTML placeholder
       
       if (contentResponse.ok) {
-        const contentData = await contentResponse.json();
-        content = contentData.content || "Content not available";
+        try {
+          const contentData = await contentResponse.json();
+          // Ensure contentData.content is a non-empty string, otherwise use the placeholder
+          if (contentData && typeof contentData.content === 'string' && contentData.content.trim() !== '') {
+            contentHtml = contentData.content;
+          }
+        } catch (e) {
+          // Error parsing JSON, or other issue, stick with default placeholder
+          console.error("Error processing contentResponse JSON:", e);
+        }
       }
 
       // Create document
@@ -101,8 +109,8 @@ export default function Home() {
         reportDate: latest10K.reportDate || latest10K.filingDate,
         documentUrl: documentUrl,
         title: `Apple Inc. ${latest10K.form} - ${latest10K.filingDate}`,
-        content: content,
-        totalPages: 1,
+        content: contentHtml, // Use the new variable
+        totalPages: null, // Changed to null
       };
 
       return await apiRequest("POST", "/api/documents", documentData);
@@ -128,7 +136,7 @@ export default function Home() {
 
   // Auto-load Apple 10-K if no documents exist and not already initialized
   useEffect(() => {
-    if (!hasInitialized && recentDocuments.length === 0 && !currentDocumentId && !params.id) {
+    if (false && !hasInitialized && recentDocuments.length === 0 && !currentDocumentId && !params.id) { // Added 'false &&'
       setHasInitialized(true);
       createAppleDocumentMutation.mutate();
     }

@@ -51,9 +51,20 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
     
     switch (type) {
       case "highlight":
-        return `${baseClasses} bg-orange-50 border-orange-200`;
+        switch (color) {
+          case 'orange':
+            return `${baseClasses} bg-orange-50 border-orange-200`;
+          case 'green':
+            return `${baseClasses} bg-green-50 border-green-200`;
+          case 'pink':
+            return `${baseClasses} bg-pink-50 border-pink-200`;
+          case 'blue':
+            return `${baseClasses} bg-blue-50 border-blue-200`;
+          default: // Fallback if color is somehow undefined or unexpected for a highlight
+            return `${baseClasses} bg-orange-50 border-orange-200`;
+        }
       case "note":
-        return `${baseClasses} bg-pink-50 border-pink-200`;
+        return `${baseClasses} bg-gray-50 border-gray-200`; // Neutral styling for notes
       case "bookmark":
         return `${baseClasses} bg-green-50 border-green-200`;
       default:
