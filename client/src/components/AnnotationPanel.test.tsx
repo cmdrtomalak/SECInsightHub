@@ -137,6 +137,11 @@ describe('AnnotationPanel', () => {
       const timestampSpan = screen.getByText(expectedDateString);
       expect(timestampSpan).toHaveClass('text-gray-600'); // Or dark:text-gray-400
 
+      // Page number
+      const pageNumberSpan = screen.getByText(`Page ${firstAnnotation.pageNumber}`);
+      expect(pageNumberSpan).toHaveClass('text-gray-500');
+      expect(pageNumberSpan).toHaveClass('dark:text-gray-400');
+
       // Verify second annotation to be sure mapping works
       const secondAnnotation = mockAnnotations[1];
       expect(screen.getByText(new RegExp(secondAnnotation.selectedText.substring(0, 10), 'i'))).toBeInTheDocument();

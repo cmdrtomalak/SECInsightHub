@@ -168,7 +168,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
                 <span className={`text-xs font-medium px-2 py-1 rounded ${getTypeColor(annotation.type)}`}>
                   {annotation.type.charAt(0).toUpperCase() + annotation.type.slice(1)}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   Page {annotation.pageNumber}
                 </span>
               </div>
