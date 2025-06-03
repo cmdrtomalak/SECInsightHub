@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Plus, Edit, Trash2, X, ChevronRight } from "lucide-react";
@@ -177,20 +178,20 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
               </p>
               
               {annotation.note && (
-                <div className="bg-white rounded p-2 mb-2">
+                <div className="bg-white rounded p-2 mb-2 border border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-muted-foreground">{annotation.note}</p>
                 </div>
               )}
               
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-gray-600 dark:text-gray-400">
                   {formatDistanceToNow(new Date(annotation.createdAt), { addSuffix: true })}
                 </span>
                 <div className="flex space-x-1">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteAnnotationMutation.mutate(annotation.id);
