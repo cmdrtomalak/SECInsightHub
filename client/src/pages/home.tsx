@@ -143,32 +143,30 @@ export default function Home() {
       if (numericId !== null) {
         navigate(`/document/${numericId}`);
         toast({
-          title: "Demo document loaded",
-          description: "Apple's latest 10-K has been loaded for demonstration.",
+          title: "Demo Document Loaded",
+          description: newDocument?.title ? `${newDocument.title} has been loaded.` : "The document has been loaded.",
         });
         queryClient.invalidateQueries({ queryKey: ['/api/documents/recent'] });
-        // console.log("[Home Page] Invalidated recent documents query after demo load.");
+        // Optionally, invalidate company-specific documents if appleCompany.id is available and known here
+        // For example, if appleCompany was accessible: queryClient.invalidateQueries({ queryKey: ['/api/companies', appleCompany.id, 'documents'] });
       } else {
-        navigate("/"); // Navigate to a neutral state if ID is bad
+        // Actions if numericId is null (e.g., newDocument.id was invalid):
+        console.warn("[Home Page] createAppleDocumentMutation.onSuccess: newDocument.id was invalid, not navigating to document page.");
+        navigate("/"); // Navigate to a neutral state
         toast({
-          title: "Demo document loaded",
-          description: "Apple's latest 10-K has been loaded for demonstration.",
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/documents/recent'] });
-        // Optionally, invalidate company-specific documents if appleCompany.id is available here
-        // queryClient.invalidateQueries({ queryKey: ['/api/companies', appleCompany.id, 'documents'] });
-
-      } else {
-        navigate("/"); // Navigate to a neutral state if ID is bad
-        toast({
-          title: "Error Loading Demo",
-          description: "Could not determine a valid ID for the demo document.",
+          title: "Error Importing Document",
+          description: "Could not obtain a valid ID for the imported document.",
           variant: "destructive",
         });
       }
     },
     onError: (error) => {
       console.error("Failed to load demo document:", error);
+      toast({ // Add a toast message for the onError case as well
+        title: "Error Loading Demo Document",
+        description: error.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     },
   });
 
