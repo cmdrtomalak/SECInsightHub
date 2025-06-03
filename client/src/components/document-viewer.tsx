@@ -133,8 +133,15 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   useEffect(() => {
     if (contentRef.current && currentPageContent) {
+      console.log("[DocumentViewer] Running setupTextSelection effect. currentPage:", currentPage, "Has currentPageContent:", !!currentPageContent);
       const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
       const cleanup = setupTextSelection(contentRef.current, (text: string, startOffset: number, endOffset: number, event: MouseEvent) => {
+        // Log inside the callback
+        console.log("[DocumentViewer] Text selection callback triggered!");
+        console.log("[DocumentViewer] Selected text:", text.substring(0, 100) + (text.length > 100 ? "..." : ""));
+        console.log("[DocumentViewer] Local offsets (start/end):", startOffset, "/", endOffset);
+        console.log("[DocumentViewer] Mouse event (clientX/clientY):", event.clientX, "/", event.clientY);
+
         const globalStartOffset = currentPageGlobalStartOffset + startOffset;
         const globalEndOffset = currentPageGlobalStartOffset + endOffset;
 
@@ -146,9 +153,20 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           endOffset: globalEndOffset,     // Store global offset
         });
       });
-      return cleanup;
+
+      return () => {
+        console.log("[DocumentViewer] Cleanup setupTextSelection effect. currentPage:", currentPage);
+        cleanup();
+      };
+    } else {
+      console.log("[DocumentViewer] setupTextSelection effect: contentRef.current is null or no currentPageContent.");
     }
-  }, [currentPageContent, currentPage]); // Rerun text selection setup when page content or number changes
+  }, [currentPageContent, currentPage]);
+
+  // Log contextMenu state changes
+  useEffect(() => {
+    console.log("[DocumentViewer] contextMenu state changed:", contextMenu);
+  }, [contextMenu]);
 
   // Helper function for scrolling to an offset
   const scrollToOffset = (globalStartOffset: number, localOffsetToScroll: number) => {
