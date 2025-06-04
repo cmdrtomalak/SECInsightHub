@@ -109,8 +109,27 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
                 const localOffsetToScroll = pendingScrollOffset % DEFAULT_CHUNK_SIZE;
 
                 setTimeout(() => {
-                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Now calling scrollToOffset for global offset ${pendingScrollOffset}`);
-                  scrollToOffset(pendingScrollOffset, localOffsetToScroll);
+                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Executing for global offset ${pendingScrollOffset}. Current page: ${currentPage}.`);
+
+                  // ---- NEW DETAILED LOGGING START ----
+                  if (pendingScrollOffset !== null) { // Re-check pendingScrollOffset as it might be cleared by a rapid subsequent event
+                    if (contentRef.current) {
+                      console.log(`[DocumentViewer pendingScrollEffect] setTimeout: contentRef.current is available.`);
+                      const element = contentRef.current.querySelector(`[data-annotation-start="${pendingScrollOffset}"]`) as HTMLElement;
+                      if (element) {
+                        console.log(`[DocumentViewer pendingScrollEffect] setTimeout: querySelector FOUND element:`, element);
+                      } else {
+                        console.warn(`[DocumentViewer pendingScrollEffect] setTimeout: querySelector DID NOT FIND element for offset ${pendingScrollOffset}.`);
+                      }
+                    } else {
+                      console.warn(`[DocumentViewer pendingScrollEffect] setTimeout: contentRef.current is NULL at time of query.`);
+                    }
+                  // ---- NEW DETAILED LOGGING END ----
+
+                    scrollToOffset(pendingScrollOffset, localOffsetToScroll); // Call existing function
+                  } else {
+                    console.log(`[DocumentViewer pendingScrollEffect] setTimeout: pendingScrollOffset became null before scrollToOffset call.`);
+                  }
                   setPendingScrollOffset(null); // Clear pending offset after attempting scroll
                 }, 50);
 
