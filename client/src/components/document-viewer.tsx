@@ -360,8 +360,6 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
     const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
 
-    const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
-
     // Filter annotations for the current page and adjust their offsets
     const annotationsToDisplay = annotations
       .map(ann => ({
