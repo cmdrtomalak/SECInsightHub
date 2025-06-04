@@ -1,3 +1,5 @@
+import type { DocumentChunk } from "@shared/schema";
+
 // SEC EDGAR API utilities
 export interface SECCompany {
   cik: string;
@@ -115,4 +117,22 @@ export function parseSECFilings(submission: SECSubmission): SECFiling[] {
 
 export function filterFilings(filings: SECFiling[], formTypes: string[] = ["10-K", "10-Q"]): SECFiling[] {
   return filings.filter(filing => formTypes.includes(filing.form));
+}
+
+export async function getSECDocumentPage(documentId: number, pageNumber: number): Promise<DocumentChunk | null> {
+  try {
+    const response = await fetch(`/api/documents/${documentId}/page/${pageNumber}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`Document page not found: docId=${documentId}, page=${pageNumber}`);
+        return null;
+      }
+      throw new Error(`Failed to fetch document page ${pageNumber} for document ${documentId}. Status: ${response.status}`);
+    }
+    const data: DocumentChunk = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error fetching document page ${pageNumber} for document ${documentId}:`, error);
+    return null;
+  }
 }

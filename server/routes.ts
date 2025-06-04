@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDocumentSchema, insertAnnotationSchema } from "@shared/schema";
+import { insertCompanySchema, insertDocumentSchema, insertAnnotationSchema, type InsertDocument } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -144,29 +144,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/documents", async (req, res) => {
     try {
-      const documentData = insertDocumentSchema.parse(req.body);
-      const document = await storage.createDocument(documentData);
-      res.status(201).json(document);
+      const incomingData = req.body;
+
+      // 1. Validate incoming metadata
+      const importRequestSchema = insertDocumentSchema.pick({
+        companyId: true,
+        accessionNumber: true,
+        formType: true,
+        filingDate: true,
+        documentUrl: true,
+        title: true,
+        reportDate: true
+      });
+
+      const validatedData = importRequestSchema.parse(incomingData);
+
+      // 2. Fetch content from SEC using validatedData.documentUrl
+      let fullContent: string;
+      try {
+        console.log(`[Server] POST /api/documents: Fetching content from SEC URL: ${validatedData.documentUrl}`);
+        const secFetchResponse = await fetch(validatedData.documentUrl, {
+          headers: { 'User-Agent': 'SEC Document Analyzer contact@example.com' },
+        });
+        if (!secFetchResponse.ok) {
+          console.error(`[Server] POST /api/documents: Failed to fetch from SEC. Status: ${secFetchResponse.status}, URL: ${validatedData.documentUrl}`);
+          return res.status(502).json({ error: "Failed to fetch document content from SEC.", sec_status: secFetchResponse.status });
+        }
+        fullContent = await secFetchResponse.text();
+        console.log(`[Server] POST /api/documents: Successfully fetched content from SEC. Length: ${fullContent.length}`);
+      } catch (fetchError) {
+        console.error(`[Server] POST /api/documents: Network or other error fetching from SEC URL: ${validatedData.documentUrl}`, fetchError);
+        return res.status(503).json({ error: "Service unavailable: Error fetching document from SEC." });
+      }
+
+      if (!fullContent || fullContent.trim() === '') {
+        // This check is after fetching from SEC
+        return res.status(400).json({ error: "Fetched document content from SEC is empty or invalid." });
+      }
+
+      // 3. Create initial document entry (metadata only)
+      const documentToCreate: InsertDocument = {
+        ...validatedData,
+        content: null,
+        totalPages: 0,
+      };
+      const newDocumentMetadata = await storage.createDocument(documentToCreate);
+      console.log(`[Server] POST /api/documents: Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
+
+      // 4. Process content (chunking)
+      await storage.updateDocumentContent(newDocumentMetadata.id, fullContent);
+      console.log(`[Server] POST /api/documents: Finished chunking for doc ID: ${newDocumentMetadata.id}`);
+
+      const finalDocument = await storage.getDocument(newDocumentMetadata.id);
+      if (!finalDocument) {
+        console.error("[Server] POST /api/documents: Critical error - Failed to retrieve document immediately after creation/update for ID:", newDocumentMetadata.id);
+        return res.status(500).json({ error: "Internal server error: Failed to retrieve document after import." });
+      }
+      console.log(`[Server] POST /api/documents: Successfully created and chunked document ID: ${finalDocument.id}, Total Pages: ${finalDocument.totalPages}`);
+      res.status(201).json(finalDocument);
+
     } catch (error) {
-      console.error("Error creating document:", error);
-      res.status(400).json({ error: "Invalid document data" });
+      if (error instanceof z.ZodError) {
+        console.error("[Server] POST /api/documents: Zod validation error for incoming metadata:", error.flatten().fieldErrors);
+        return res.status(400).json({ error: "Invalid metadata provided for import.", details: error.flatten().fieldErrors });
+      } else {
+        console.error("[Server] POST /api/documents: General error during import:", error);
+        return res.status(500).json({ error: "Failed to import document due to an unexpected internal server error." });
+      }
     }
   });
 
   app.patch("/api/documents/:id/content", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { content, totalPages } = req.body;
+      const { content, totalPages } = req.body; // totalPages from body will be ignored by storage.updateDocumentContent
+      console.log(`[PATCH /api/documents/:id/content] Received content for document ID ${id}. Content length: ${content?.length}, Input totalPages (ignored): ${totalPages}`);
       
-      if (!content) {
-        return res.status(400).json({ error: "Content is required" });
+      if (typeof content !== 'string') { // Ensure content is a string
+        return res.status(400).json({ error: "Content is required and must be a string" });
       }
       
-      await storage.updateDocumentContent(id, content, totalPages);
+      await storage.updateDocumentContent(id, content); // Pass only id and content
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating document content:", error);
       res.status(500).json({ error: "Failed to update document content" });
+    }
+  });
+
+  // New endpoint to get a specific page/chunk of a document
+  app.get("/api/documents/:documentId/page/:pageNumber", async (req, res) => {
+    try {
+      const documentId = parseInt(req.params.documentId);
+      const pageNumber = parseInt(req.params.pageNumber);
+
+      if (isNaN(documentId) || isNaN(pageNumber)) {
+        return res.status(400).json({ error: "Invalid document ID or page number." });
+      }
+
+      const chunk = await storage.getDocumentChunk(documentId, pageNumber);
+
+      if (!chunk) {
+        return res.status(404).json({ error: "Document page not found." });
+      }
+
+      res.json(chunk);
+    } catch (error) {
+      console.error(`Error fetching document page: docId=${req.params.documentId}, page=${req.params.pageNumber}`, error);
+      res.status(500).json({ error: "Failed to fetch document page." });
     }
   });
 
@@ -275,6 +360,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const content = await response.text();
+      console.log(`[/api/sec/document] Fetched content from SEC. URL: ${url}, Content length: ${content?.length}`);
+      console.log(`[/api/sec/document] Sending content to client. URL: ${url}, Content length: ${content?.length}`);
       res.json({ content });
     } catch (error) {
       console.error("Error fetching SEC document:", error);
