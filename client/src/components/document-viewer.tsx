@@ -206,24 +206,48 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     if (contentRef.current) {
       const annotationElement = contentRef.current.querySelector(`[data-annotation-start="${globalStartOffset}"]`) as HTMLElement;
       if (annotationElement) {
-        console.log("[DocumentViewer scrollToOffset] Annotation element found:", annotationElement);
-        const scrollContainer = contentRef.current.closest('.overflow-y-auto');
+        console.log(`[DocumentViewer scrollToOffset] Annotation element found for globalStartOffset ${globalStartOffset}:`, annotationElement);
+
+        const scrollContainer = contentRef.current.closest('.overflow-y-auto') as HTMLElement | null;
+
+        // ---- NEW DETAILED LOGGING START ----
         if (scrollContainer) {
+          console.log("[DocumentViewer scrollToOffset] Scroll container found:", scrollContainer);
           const containerRect = scrollContainer.getBoundingClientRect();
           const elementRect = annotationElement.getBoundingClientRect();
-          const scrollTop = elementRect.top - containerRect.top + scrollContainer.scrollTop - 20;
-          scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
+          console.log("[DocumentViewer scrollToOffset] ContainerRect:", JSON.stringify(containerRect));
+          console.log("[DocumentViewer scrollToOffset] ElementRect:", JSON.stringify(elementRect));
+
+          const scrollTopValue = elementRect.top - containerRect.top + scrollContainer.scrollTop - 20; // 20px offset
+          console.log(`[DocumentViewer scrollToOffset] Calculated scrollTopValue: ${scrollTopValue}`);
+
+          const scrollTopBefore = scrollContainer.scrollTop;
+          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop BEFORE: ${scrollTopBefore}`);
+
+          scrollContainer.scrollTo({
+            top: scrollTopValue,
+            behavior: 'smooth'
+          });
+
+          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop AFTER attempting scrollTo: ${scrollContainer.scrollTop}`);
+
         } else {
-          annotationElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          console.warn("[DocumentViewer scrollToOffset] Scroll container (.overflow-y-auto) not found. Using fallback scrollIntoView.");
+          annotationElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
         }
+        // ---- NEW DETAILED LOGGING END ----
+
       } else {
-        console.warn("[DocumentViewer scrollToOffset] Annotation element NOT found by querySelector. Using fallback percentage scroll.");
-        if (currentPageContent) { // Fallback scrolling
+        console.warn(`[DocumentViewer scrollToOffset] Annotation element NOT found by querySelector for globalStartOffset ${globalStartOffset}. Using fallback percentage scroll.`);
+        if (currentPageContent) { // Fallback scrolling logic remains
           const percentage = localOffsetToScroll / currentPageContent.length;
           const scrollTop = contentRef.current.scrollHeight * percentage;
-          const scrollContainer = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
-          if (scrollContainer) {
-            scrollContainer.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
+          const scrollContainerFallback = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
+          if (scrollContainerFallback) {
+            scrollContainerFallback.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
           }
         } else {
           console.warn("[DocumentViewer scrollToOffset] Fallback scroll failed: currentPageContent is null.");
