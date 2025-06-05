@@ -381,8 +381,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   };
 
   const highlightText = (content: string) => {
-    // Highlighting logic adjusted for pagination
-    console.log("DocumentViewer: highlightText called. Current Page Content (first 500 chars):", content?.substring(0, 500));
+    console.log("DocumentViewer: highlightText (single-pass) called. Content length:", content?.length);
     if (!content) return "";
 
     if (
@@ -391,214 +390,139 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       typeof window.document.createTreeWalker !== 'function' ||
       typeof window.document.createRange !== 'function'
     ) {
-      console.log("highlightText: SSR guard TRIGGERED. Exiting early. typeof window.document:", typeof window.document);
+      console.warn("highlightText: SSR guard or missing DOM APIs. Exiting early.");
       return content;
-    } else {
-      console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic. typeof window.document:", typeof window.document);
     }
-    // console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
 
     const tempDiv = window.document.createElement('div');
-    tempDiv.innerHTML = content; // content is fullDocumentContent
+    tempDiv.innerHTML = content;
 
-    // const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE; // Removed
+    interface TextNodeInfo {
+      node: Text;
+      globalStartOffset: number;
+      textLength: number;
+    }
 
-    // Annotations are already global. No need to filter by page or calculate local offsets here.
-    // All annotations for the document are relevant.
-    const annotationsToDisplay = annotations
-      // Sort by original global start offset to maintain highlighting order
-      .sort((a, b) => b.startOffset - a.startOffset); // Descending for processing from end of content
+    const allTextNodesInfo: TextNodeInfo[] = [];
+    let currentGlobalOffset = 0;
+    const textWalker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
+    let textNode;
+    while (textNode = textWalker.nextNode() as Text | null) {
+      if (textNode.textContent) { // Ensure textContent is not null or empty
+        allTextNodesInfo.push({
+          node: textNode,
+          globalStartOffset: currentGlobalOffset,
+          textLength: textNode.textContent.length,
+        });
+        currentGlobalOffset += textNode.textContent.length;
+      }
+    }
 
-    console.log(`DocumentViewer: Highlighting. Displaying ${annotationsToDisplay.length} annotations from ${annotations.length} total.`);
+    console.log(`[highlightText] Collected ${allTextNodesInfo.length} text nodes.`);
 
-    for (const annotation of annotationsToDisplay) {
-      // Offsets are already global and relative to the full content.
-      const clampedLocalStart = Math.max(0, annotation.startOffset);
-      const clampedLocalEnd = Math.min(content.length, annotation.endOffset);
+    // Ensure annotations are sorted by startOffset, then by endOffset descending (longest first for overlaps)
+    const sortedAnnotations = [...annotations].sort((a, b) => {
+      if (a.startOffset !== b.startOffset) {
+        return a.startOffset - b.startOffset;
+      }
+      return b.endOffset - a.endOffset; // Longest annotations first if start offsets are the same
+    });
 
-      if (clampedLocalStart >= clampedLocalEnd) {
-        console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}. Skipping as clampedStart (${clampedLocalStart}) >= clampedEnd (${clampedLocalEnd}). Original global: ${annotation.startOffset}-${annotation.endOffset}.`);
-        continue;
+    let annotationIndex = 0;
+    for (const textNodeInfo of allTextNodesInfo) {
+      const nodeStart = textNodeInfo.globalStartOffset;
+      const nodeEnd = nodeStart + textNodeInfo.textLength;
+      const currentNode = textNodeInfo.node;
+
+      // Optimization: If all annotations have been processed, stop iterating text nodes for highlighting.
+      if (annotationIndex >= sortedAnnotations.length) {
+          console.log("[highlightText] All annotations processed. Breaking from text node loop.");
+          break;
       }
 
-      console.log(
-        `[highlightText TreeWalker] Processing Ann ID ${annotation.id}. Global: ${annotation.startOffset}-${annotation.endOffset}. Clamped: ${clampedLocalStart}-${clampedLocalEnd}. Content length: ${content.length}`
-      );
-
-      if (isNaN(clampedLocalStart) || isNaN(clampedLocalEnd)) {
-        console.warn(
-          `[highlightText TreeWalker] Ann ID ${annotation.id}: NaN DETECTED IN CLAMPED LOCAL OFFSETS. LocalStart: ${clampedLocalStart}, LocalEnd: ${clampedLocalEnd}`
-        );
-        continue;
+      // Optimization: Skip text nodes that are before the current annotation's start.
+      // This requires currentAnnotation to be defined.
+      if (annotationIndex < sortedAnnotations.length && nodeEnd <= sortedAnnotations[annotationIndex].startOffset) {
+          continue;
       }
 
-      if (annotation.type === 'highlight') {
-        const bgColorClass = getHighlightBackgroundColorClass(annotation.color);
-        const walker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
-        let currentWalkerOffset = 0; // Renamed from currentOffset for clarity within this scope
-        let startNode: Text | null = null;
-        let endNode: Text | null = null;
-        let startNodeOffsetInText = 0; // Renamed from startNodeOffset
-        let endNodeOffsetInText = 0;   // Renamed from endNodeOffset
+      // Use a new loop for annotations for the current text node to handle multiple annotations on one node
+      // This is safer than manipulating annotationIndex directly in the outer loop for this part.
+      // However, the original design was to advance annotationIndex, so we'll stick to that.
+      while (annotationIndex < sortedAnnotations.length) {
+        const currentAnnotation = sortedAnnotations[annotationIndex];
 
-        let currentNode;
-        while (currentNode = walker.nextNode()) {
-          const nodeText = currentNode.textContent || "";
-          const nodeLength = nodeText.length;
-
-          console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Node type: ${currentNode.nodeType}, currentWalkerOffset: ${currentWalkerOffset}, nodeLength: ${nodeLength}, Node text (snippet): "${nodeText.substring(0, 50).replace(/\n/g, ' ')}"`);
-
-          if (startNode === null) {
-            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Checking for startNode. Condition: (${currentWalkerOffset} + ${nodeLength} > ${clampedLocalStart}) = ${currentWalkerOffset + nodeLength > clampedLocalStart}`);
-          }
-          if (startNode === null && currentWalkerOffset + nodeLength > clampedLocalStart) {
-            startNode = currentNode as Text;
-            startNodeOffsetInText = clampedLocalStart - currentWalkerOffset;
-            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found startNode! startNodeOffsetInText: ${startNodeOffsetInText}. Node text: "${startNode.textContent?.substring(0,100).replace(/\n/g, ' ')}"`);
-          }
-
-          // Check endNode condition regardless of whether startNode is found yet, but only assign if endNode is still null.
-          // This helps in logging the condition check accurately.
-          if (endNode === null) {
-             console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Checking for endNode. Condition: (${currentWalkerOffset} + ${nodeLength} >= ${clampedLocalEnd}) = ${currentWalkerOffset + nodeLength >= clampedLocalEnd}`);
-          }
-          if (endNode === null && currentWalkerOffset + nodeLength >= clampedLocalEnd) {
-            endNode = currentNode as Text;
-            endNodeOffsetInText = clampedLocalEnd - currentWalkerOffset;
-            console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode! endNodeOffsetInText: ${endNodeOffsetInText}. Node text: "${endNode.textContent?.substring(0,100).replace(/\n/g, ' ')}"`);
-            if (startNode === null) {
-            console.error(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode BUT startNode is still null! This is an error. ClampedStart: ${clampedLocalStart}`);
-            }
-            break;
-          }
-          currentWalkerOffset += nodeLength;
+        // If annotation starts after current node ends, move to next text node
+        if (currentAnnotation.startOffset >= nodeEnd) {
+          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (start: ${currentAnnotation.startOffset}) starts after current node (ends: ${nodeEnd}). Breaking for this node.`);
+          break;
         }
 
-        if (startNode && endNode) {
-          const baseClass = "annotation-highlight";
-          const annotationIdStr = annotation.id.toString();
-          const globalAnnotationStartStr = annotation.startOffset.toString(); // Key for scrolling
+        // If annotation ends before current node starts, it's fully processed or irrelevant to this and subsequent nodes.
+        if (currentAnnotation.endOffset <= nodeStart) {
+          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) ends before current node (starts: ${nodeStart}). Incrementing annotationIndex.`);
+          annotationIndex++;
+          continue; // Check next annotation for this same node
+        }
 
-          const addMarkerIfNeeded = (referenceNode: Node) => {
-              if (annotation.note && referenceNode.parentNode) {
-                  const markerNode = window.document.createTextNode(' 📝');
-                  referenceNode.parentNode.insertBefore(markerNode, referenceNode.nextSibling);
-              }
-          };
+        // Overlap exists
+        if (currentAnnotation.type === 'highlight') {
+            const highlightStartInNode = Math.max(0, currentAnnotation.startOffset - nodeStart);
+            const highlightEndInNode = Math.min(textNodeInfo.textLength, currentAnnotation.endOffset - nodeStart);
 
-          if (startNode === endNode) {
-              try {
-                  const range = window.document.createRange();
-                  // Use the already calculated startNodeOffsetInText and endNodeOffsetInText
-                  // Ensure offsets are within the bounds of the specific text node's content
-                  const SNodeOffset = Math.min(startNodeOffsetInText, (startNode.textContent || "").length);
-                  const ENodeOffset = Math.min(endNodeOffsetInText, (startNode.textContent || "").length);
+            if (highlightStartInNode < highlightEndInNode) {
+                console.log(`[highlightText] Applying highlight for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}. Segment: ${highlightStartInNode}-${highlightEndInNode}. Global Ann: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}`);
+                try {
+                    const range = window.document.createRange();
+                    range.setStart(currentNode, highlightStartInNode);
+                    range.setEnd(currentNode, highlightEndInNode);
 
-                  range.setStart(startNode, SNodeOffset);
-                  range.setEnd(startNode, ENodeOffset); // Use startNode here as it's the same as endNode
+                    const spanElement = window.document.createElement('span');
+                    spanElement.className = `annotation-highlight ${getHighlightBackgroundColorClass(currentAnnotation.color)}`;
+                    spanElement.setAttribute('data-annotation-id', currentAnnotation.id.toString());
+                    spanElement.setAttribute('data-annotation-start', currentAnnotation.startOffset.toString());
 
-                  const spanElement = window.document.createElement('span');
-                  spanElement.className = `${baseClass} ${bgColorClass}`;
-                  spanElement.setAttribute('data-annotation-id', annotationIdStr);
-                  spanElement.setAttribute('data-annotation-start', globalAnnotationStartStr);
-                  if (annotation.note) {
-                      spanElement.setAttribute('title', annotation.note);
-                  }
-                  range.surroundContents(spanElement);
-                  addMarkerIfNeeded(spanElement);
-              } catch (e) {
-                  console.error(`highlightText (single-node): Error for ann ID ${annotation.id}`, {
-                      error: e,
-                      clampedStart: clampedLocalStart,
-                      clampedEnd: clampedLocalEnd,
-                      startNodeOffset: startNodeOffsetInText,
-                      endNodeOffset: endNodeOffsetInText,
-                      nodeLength: (startNode.textContent || "").length,
-                      rangeString: range.toString().substring(0,100)
-                  });
-              }
-          } else { // startNode !== endNode - Multi-node highlighting
-              // 1. Highlight startNode
-              try {
-                  const rangeStart = window.document.createRange();
-                  const SNodeOffset = Math.min(startNodeOffsetInText, (startNode.textContent || "").length);
-                  rangeStart.setStart(startNode, SNodeOffset);
-                  rangeStart.setEnd(startNode, (startNode.textContent || "").length); // Highlight to the end of the startNode
+                    // Apply title only if this segment is the one where the annotation logically "ends" for the user
+                    // or apply to all segments. For simplicity, apply if it's the last segment being highlighted for this annotation.
+                    if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
+                       spanElement.setAttribute('title', currentAnnotation.note);
+                    }
 
-                  const spanElementStart = window.document.createElement('span');
-                  spanElementStart.className = `${baseClass} ${bgColorClass}`;
-                  spanElementStart.setAttribute('data-annotation-id', annotationIdStr);
-                  spanElementStart.setAttribute('data-annotation-start', globalAnnotationStartStr);
-                  // No title or marker on partial segments usually, unless it's the only segment.
-                  // Here, title and marker will be on the end segment.
-                  rangeStart.surroundContents(spanElementStart);
-              } catch (e) {
-                  console.error(`highlightText (multi-node start): Error for ann ID ${annotation.id}`, {
-                      error: e,
-                      clampedStart: clampedLocalStart,
-                      startNodeOffset: startNodeOffsetInText,
-                      nodeLength: (startNode.textContent || "").length
-                  });
-              }
+                    range.surroundContents(spanElement);
 
-              // 2. Highlight nodes in between
-              // Use a new TreeWalker that starts from the tempDiv root.
-              // This ensures it's independent of the outer walker's state.
-              const intermediateWalker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
-              let activeHighlighting = false;
-              let tempCurrentNode;
-              while (tempCurrentNode = intermediateWalker.nextNode()) {
-                  if (tempCurrentNode === startNode) {
-                      activeHighlighting = true;
-                      continue; // Start node handled
-                  }
-                  if (tempCurrentNode === endNode) {
-                      activeHighlighting = false; // Stop before processing end node
-                      break;
-                  }
-                  if (activeHighlighting && tempCurrentNode.textContent && tempCurrentNode.textContent.trim() !== '') {
-                      try {
-                          const rangeMiddle = document.createRange();
-                          rangeMiddle.selectNodeContents(tempCurrentNode); // Highlight the entire text node
-                          const spanElementMiddle = document.createElement('span');
-                          spanElementMiddle.className = `${baseClass} ${bgColorClass}`;
-                          spanElementMiddle.setAttribute('data-annotation-id', annotationIdStr);
-                          spanElementMiddle.setAttribute('data-annotation-start', globalAnnotationStartStr);
-                          rangeMiddle.surroundContents(spanElementMiddle);
-                      } catch (e) {
-                          console.error(`highlightText (multi-node middle): Error for ann ID ${annotation.id} on node`, tempCurrentNode, e);
-                      }
-                  }
-              }
+                    // Add marker if this segment is the very end of the annotation
+                    if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
+                        if (spanElement.parentNode) { // Check parentNode before insertBefore
+                           const markerNode = window.document.createTextNode(' 📝');
+                           spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
+                        } else {
+                            console.warn(`[highlightText] spanElement for Ann ID ${currentAnnotation.id} has no parentNode. Cannot add marker.`);
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[highlightText] Error surrounding contents for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}`, {
+                        error: e,
+                        annStart: currentAnnotation.startOffset,
+                        annEnd: currentAnnotation.endOffset,
+                        nodeStart,
+                        nodeEnd,
+                        highlightStartInNode,
+                        highlightEndInNode,
+                    });
+                }
+            }
+        }
 
-              // 3. Highlight endNode
-              try {
-                  const rangeEnd = window.document.createRange();
-                  const ENodeOffset = Math.min(endNodeOffsetInText, (endNode.textContent || "").length);
-                  rangeEnd.setStart(endNode, 0); // Highlight from the beginning of the endNode
-                  rangeEnd.setEnd(endNode, ENodeOffset);
-
-                  const spanElementEnd = window.document.createElement('span');
-                  spanElementEnd.className = `${baseClass} ${bgColorClass}`;
-                  spanElementEnd.setAttribute('data-annotation-id', annotationIdStr);
-                  spanElementEnd.setAttribute('data-annotation-start', globalAnnotationStartStr);
-                  if (annotation.note) { // Add title to the last segment
-                      spanElementEnd.setAttribute('title', annotation.note);
-                  }
-                  rangeEnd.surroundContents(spanElementEnd);
-                  addMarkerIfNeeded(spanElementEnd); // Add marker after the last segment
-              } catch (e) {
-                  console.error(`highlightText (multi-node end): Error for ann ID ${annotation.id}`, {
-                      error: e,
-                      clampedEnd: clampedLocalEnd,
-                      endNodeOffset: endNodeOffsetInText,
-                      nodeLength: (endNode.textContent || "").length
-                  });
-              }
-          }
+        // If this annotation is finished within this node, move to the next annotation for this same node.
+        if (currentAnnotation.endOffset <= nodeEnd) {
+          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) finishes in this node (ends: ${nodeEnd}). Incrementing annotationIndex.`);
+          annotationIndex++;
+          // continue; // This would re-evaluate the *new* currentAnnotation against the same text node.
         } else {
-            // Original warning if start/end nodes not found
-            console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. ClampedStart: ${clampedLocalStart}, ClampedEnd: ${clampedLocalEnd}`);
+          // This annotation spans past the current text node.
+          // So, for the *next text node*, we'll still be considering *this same annotation*.
+          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) spans past this node (ends: ${nodeEnd}). Breaking for this node, will re-eval ann on next node.`);
+          break; // Move to the next text node, current annotation remains the same.
         }
       }
     }
