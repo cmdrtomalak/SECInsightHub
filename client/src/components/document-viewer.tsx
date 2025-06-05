@@ -408,14 +408,17 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     const textWalker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
     let textNode;
     while (textNode = textWalker.nextNode() as Text | null) {
-      if (textNode.textContent) { // Ensure textContent is not null or empty
+      const textContent = textNode.textContent || ""; // Get text content
+      const textLength = textContent.length;
+      if (textLength > 0) { // Only add if length is greater than 0
         allTextNodesInfo.push({
           node: textNode,
           globalStartOffset: currentGlobalOffset,
-          textLength: textNode.textContent.length,
+          textLength: textLength,
         });
-        currentGlobalOffset += textNode.textContent.length;
+        currentGlobalOffset += textLength;
       }
+      // If textLength is 0, currentGlobalOffset does not change for this empty node.
     }
 
     console.log(`[highlightText] Collected ${allTextNodesInfo.length} text nodes.`);
@@ -466,50 +469,66 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         }
 
         // Overlap exists
-        if (currentAnnotation.type === 'highlight') {
-            const highlightStartInNode = Math.max(0, currentAnnotation.startOffset - nodeStart);
-            const highlightEndInNode = Math.min(textNodeInfo.textLength, currentAnnotation.endOffset - nodeStart);
+        // Calculate segment offsets regardless of type, as span creation is needed for markers/scrolling.
+        const highlightStartInNode = Math.max(0, currentAnnotation.startOffset - nodeStart);
+        const highlightEndInNode = Math.min(textNodeInfo.textLength, currentAnnotation.endOffset - nodeStart);
 
-            if (highlightStartInNode < highlightEndInNode) {
-                console.log(`[highlightText] Applying highlight for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}. Segment: ${highlightStartInNode}-${highlightEndInNode}. Global Ann: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}`);
-                try {
-                    const range = window.document.createRange();
-                    range.setStart(currentNode, highlightStartInNode);
-                    range.setEnd(currentNode, highlightEndInNode);
+        // ADD DETAILED LOGGING HERE
+        console.log(`[Highlight Condition Check] Ann ID: ${currentAnnotation.id}, Type: ${currentAnnotation.type}, AnnOffsets: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}, NodeRange: ${nodeStart}-${nodeEnd} (len: ${textNodeInfo.textLength}), CalcSegment: ${highlightStartInNode}-${highlightEndInNode}`);
 
-                    const spanElement = window.document.createElement('span');
-                    spanElement.className = `annotation-highlight ${getHighlightBackgroundColorClass(currentAnnotation.color)}`;
-                    spanElement.setAttribute('data-annotation-id', currentAnnotation.id.toString());
-                    spanElement.setAttribute('data-annotation-start', currentAnnotation.startOffset.toString());
+        if (highlightStartInNode < highlightEndInNode) {
+            // This is where the span is created. All annotation types that need a text range
+            // (e.g., for scrolling, marker placement) should create a span.
+            // Visual styling (like background color) is conditional based on type/color.
+            console.log(`[highlightText] Applying highlight/marker span for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}. Segment: ${highlightStartInNode}-${highlightEndInNode}. Global Ann: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}`);
+            try {
+                const range = window.document.createRange();
+                range.setStart(currentNode, highlightStartInNode);
+                range.setEnd(currentNode, highlightEndInNode);
 
-                    // Apply title only if this segment is the one where the annotation logically "ends" for the user
-                    // or apply to all segments. For simplicity, apply if it's the last segment being highlighted for this annotation.
-                    if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
-                       spanElement.setAttribute('title', currentAnnotation.note);
-                    }
+                const spanElement = window.document.createElement('span');
+                // Base class for all annotation spans, can be used for targeting.
+                spanElement.className = "annotation-span";
 
-                    range.surroundContents(spanElement);
-
-                    // Add marker if this segment is the very end of the annotation
-                    if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
-                        if (spanElement.parentNode) { // Check parentNode before insertBefore
-                           const markerNode = window.document.createTextNode(' 📝');
-                           spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
-                        } else {
-                            console.warn(`[highlightText] spanElement for Ann ID ${currentAnnotation.id} has no parentNode. Cannot add marker.`);
-                        }
-                    }
-                } catch (e) {
-                    console.error(`[highlightText] Error surrounding contents for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}`, {
-                        error: e,
-                        annStart: currentAnnotation.startOffset,
-                        annEnd: currentAnnotation.endOffset,
-                        nodeStart,
-                        nodeEnd,
-                        highlightStartInNode,
-                        highlightEndInNode,
-                    });
+                if (currentAnnotation.type === 'highlight') {
+                  // Add highlight-specific class for background color
+                  spanElement.classList.add(`annotation-highlight`);
+                  spanElement.classList.add(getHighlightBackgroundColorClass(currentAnnotation.color));
                 }
+                // For 'note' type, no explicit background color class is added unless getHighlightBackgroundColorClass handles it.
+                // If 'note' type also has a 'color' property that should be used for background,
+                // then the condition `if (currentAnnotation.type === 'highlight')` around addClass could be removed or adjusted.
+                // Assuming for now only 'highlight' type gets colored background.
+
+                spanElement.setAttribute('data-annotation-id', currentAnnotation.id.toString());
+                spanElement.setAttribute('data-annotation-start', currentAnnotation.startOffset.toString());
+
+                // Apply title if this segment is the one where the annotation logically "ends"
+                if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
+                   spanElement.setAttribute('title', currentAnnotation.note);
+                }
+
+                range.surroundContents(spanElement);
+
+                // Add marker if this segment is the very end of the annotation and it has a note
+                if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
+                    if (spanElement.parentNode) { // Check parentNode before insertBefore
+                       const markerNode = window.document.createTextNode(' 📝');
+                       spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
+                    } else {
+                        console.warn(`[highlightText] spanElement for Ann ID ${currentAnnotation.id} has no parentNode. Cannot add marker.`);
+                    }
+                }
+            } catch (e) {
+                console.error(`[highlightText] Error surrounding contents for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}`, {
+                    error: e,
+                    annStart: currentAnnotation.startOffset,
+                    annEnd: currentAnnotation.endOffset,
+                    nodeStart,
+                    nodeEnd,
+                    highlightStartInNode,
+                    highlightEndInNode,
+                });
             }
         }
 
