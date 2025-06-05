@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, Router } from "express";
 import fs from "fs";
 import path from "path";
 import { createServer as createViteServer, createLogger } from "vite";
@@ -19,7 +19,9 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-export async function setupVite(app: Express, server: Server) {
+export async function setupVite(server: Server): Promise<Router> {
+  const router = Router();
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -38,10 +40,11 @@ export async function setupVite(app: Express, server: Server) {
     },
     server: serverOptions,
     appType: "custom",
+    base: '/reader/',
   });
 
-  app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
+  router.use(vite.middlewares);
+  router.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
     try {
@@ -58,16 +61,19 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url, template);
+      const page = await vite.transformIndexHtml(url || '/', template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
     }
   });
+
+  return router;
 }
 
-export function serveStatic(app: Express) {
+export function serveStatic(): Router {
+  const router = Router();
   const distPath = path.resolve(import.meta.dirname, "public");
 
   if (!fs.existsSync(distPath)) {
@@ -76,10 +82,12 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  router.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  router.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
+
+  return router;
 }
