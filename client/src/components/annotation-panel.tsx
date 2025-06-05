@@ -219,7 +219,8 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
               
               {annotation.note && (
                 <div className="bg-white rounded p-2 mb-2 border border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-muted-foreground">{annotation.note}</p>
+                  <p className="text-xs text-gray-700">{annotation.note}</p>
+                  {/* Changed from text-muted-foreground to text-gray-700 */}
                 </div>
               )}
               

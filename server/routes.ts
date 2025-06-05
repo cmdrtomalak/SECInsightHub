@@ -95,6 +95,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document routes
+
+  // New endpoint to get the full content of a document
+  app.get("/api/documents/:documentId/full-content", async (req, res) => {
+    try {
+      const documentId = parseInt(req.params.documentId);
+
+      if (isNaN(documentId)) {
+        return res.status(400).json({ error: "Invalid document ID." });
+      }
+
+      const fullContent = await storage.getFullDocumentContent(documentId);
+
+      if (fullContent === null || fullContent === '') {
+        return res.status(404).json({ error: "Full document content not found." });
+      }
+
+      // Return as JSON: { "content": "full document text..." }
+      res.json({ content: fullContent });
+    } catch (error) {
+      const docIdParam = req.params.documentId || "unknown";
+      console.error(`Error fetching full document content for docId=${docIdParam}:`, error);
+      res.status(500).json({ error: "Failed to fetch full document content." });
+    }
+  });
+
   app.get("/api/documents/recent", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 10;

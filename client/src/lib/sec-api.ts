@@ -72,6 +72,25 @@ export async function getSECCompanyFilings(cik: string): Promise<SECSubmission |
   }
 }
 
+export async function getSECDocumentFullContent(documentId: number): Promise<string | null> {
+  try {
+    const response = await fetch(`/api/documents/${documentId}/full-content`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.content; // Assuming the server sends { content: "..." }
+    } else if (response.status === 404) {
+      console.warn(`Full content not found for document ID ${documentId}`);
+      return null;
+    } else {
+      console.error(`Error fetching full content for document ${documentId}. Status: ${response.status}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Network or other error fetching full content for document ${documentId}:`, error);
+    return null;
+  }
+}
+
 export async function getSECDocument(url: string): Promise<string | null> {
   try {
     const response = await fetch(`/api/sec/document?url=${encodeURIComponent(url)}`);
