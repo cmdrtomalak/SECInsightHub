@@ -23,7 +23,7 @@ export default function AnnotationPanel({ documentId, onOpenAnnotationModal, onJ
   const { data: annotations = [], isLoading } = useQuery({
     queryKey: ["/api/documents", documentId, "annotations"],
     queryFn: async () => {
-      const response = await fetch(`/api/documents/${documentId}/annotations`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}/annotations`);
       console.log("AnnotationPanel: Raw response for annotations, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch annotations");
       const annotationsData = await response.json();

@@ -9,7 +9,7 @@ export default function RecentDocuments({ onDocumentSelect }: RecentDocumentsPro
   const { data: recentDocuments = [], isLoading } = useQuery({
     queryKey: ["/api/documents/recent"],
     queryFn: async () => {
-      const response = await fetch("/api/documents/recent?limit=10");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/documents/recent?limit=10`);
       if (!response.ok) throw new Error("Failed to fetch recent documents");
       return response.json();
     },

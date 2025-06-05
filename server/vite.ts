@@ -61,7 +61,27 @@ export async function setupVite(server: Server): Promise<Router> {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url || '/', template);
+
+      const viteBase = vite.config.base; // Should be /reader/
+      let urlForTransform = req.originalUrl;
+
+      if (urlForTransform.startsWith(viteBase)) {
+        // Remove the base prefix to get the path relative to the base
+        // e.g., if originalUrl is /reader/foo, and base is /reader/, result is foo
+        urlForTransform = urlForTransform.substring(viteBase.length);
+        // Ensure it starts with a slash for Vite, e.g., /foo
+        if (!urlForTransform.startsWith('/')) {
+          urlForTransform = '/' + urlForTransform;
+        }
+      } else if (urlForTransform + '/' === viteBase) {
+        // Handle case where originalUrl is /reader and base is /reader/
+        urlForTransform = '/';
+      }
+      // If urlForTransform became empty (e.g. originalUrl was exactly the base like /reader/), ensure it's '/'
+      if (urlForTransform === '') {
+          urlForTransform = '/';
+      }
+      const page = await vite.transformIndexHtml(urlForTransform, template, req.originalUrl);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
