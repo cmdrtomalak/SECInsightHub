@@ -81,7 +81,7 @@ export async function setupVite(server: Server): Promise<Router> {
       if (urlForTransform === '') {
           urlForTransform = '/';
       }
-      const page = await vite.transformIndexHtml(urlForTransform, template);
+      const page = await vite.transformIndexHtml(urlForTransform, template, req.originalUrl);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
