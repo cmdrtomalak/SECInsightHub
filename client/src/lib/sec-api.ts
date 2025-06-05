@@ -52,7 +52,7 @@ export async function searchSECCompanies(query: string): Promise<SECCompany[]> {
   try {
     // This would typically use the SEC company tickers API
     // For now, we'll use a simplified approach
-    const response = await fetch(`/api/sec/company/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error("Failed to search SEC companies");
     return response.json();
   } catch (error) {
