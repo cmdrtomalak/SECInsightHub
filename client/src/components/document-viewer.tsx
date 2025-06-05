@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 // import { Input } from "@/components/ui/input"; // No longer used directly it seems
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Highlighter, Loader2 } from "lucide-react";
 import { setupTextSelection } from "@/lib/text-selection";
-import { getSECDocumentPage } from "@/lib/sec-api"; // Added import
+import { getSECDocumentFullContent } from "@/lib/sec-api";
 
-const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB in characters, should match server/storage.ts
 
 interface DocumentViewerProps {
   documentId: number | null;
@@ -36,7 +35,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     );
   }
 
-  const [currentPage, setCurrentPage] = useState(1);
+  // const [currentPage, setCurrentPage] = useState(1); // Removed
   const [zoom, setZoom] = useState(100);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -47,8 +46,8 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null); // Create ref for context menu
-  const [currentPageContent, setCurrentPageContent] = useState<string | null>(null);
-  const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
+  const [fullDocumentContent, setFullDocumentContent] = useState<string | null>(null);
+  const [isContentLoading, setIsContentLoading] = useState<boolean>(false);
   const [pendingScrollOffset, setPendingScrollOffset] = useState<number | null>(null);
 
   // Fetch document metadata (title, totalPages, etc.)
@@ -90,26 +89,26 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     // "Document content snippet (first 100):", documentMetadata?.content?.substring(0,100) ?? "N/A" // Not relevant anymore for main content
   );
 
-  // Effect to fetch current page content
+  // Effect to fetch full document content
   useEffect(() => {
     if (documentId && documentMetadata) {
-      setIsPageLoading(true);
-      setCurrentPageContent(null);
-      console.log(`DocumentViewer: Fetching page ${currentPage} for document ${documentId}`);
-      getSECDocumentPage(documentId, currentPage)
-        .then(chunk => {
-          if (chunk) {
-            console.log(`DocumentViewer: Received page ${currentPage} content. Length: ${chunk.content.length}`);
-            setCurrentPageContent(chunk.content);
+      setIsContentLoading(true);
+      setFullDocumentContent(null);
+      console.log(`DocumentViewer: Fetching full content for document ${documentId}`);
+      getSECDocumentFullContent(documentId)
+        .then(content => {
+          if (content !== null) {
+            console.log(`DocumentViewer: Received full content. Length: ${content.length}`);
+            setFullDocumentContent(content);
             // If there's a pending scroll, execute it now that content is loaded
+            // With full content, any pending scroll can be attempted directly.
             if (pendingScrollOffset !== null) {
-              const targetPageForPendingScroll = Math.floor(pendingScrollOffset / DEFAULT_CHUNK_SIZE) + 1;
-              if (currentPage === targetPageForPendingScroll) {
-                console.log(`[DocumentViewer pendingScrollEffect] Current page ${currentPage} matches target page for pending scroll. Attempting scroll.`);
-                const localOffsetToScroll = pendingScrollOffset % DEFAULT_CHUNK_SIZE;
+                console.log(`[DocumentViewer pendingScrollEffect] Full content loaded. Attempting scroll for pending offset ${pendingScrollOffset}.`);
+                // The concept of "localOffsetToScroll" becomes the global offset itself in full content view
+                const offsetToScrollTo = pendingScrollOffset;
 
                 setTimeout(() => {
-                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Executing for global offset ${pendingScrollOffset}. Current page: ${currentPage}.`);
+                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Executing for global offset ${pendingScrollOffset}.`);
 
                   // ---- NEW DETAILED LOGGING START ----
                   if (pendingScrollOffset !== null) { // Re-check pendingScrollOffset as it might be cleared by a rapid subsequent event
@@ -126,47 +125,48 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
                     }
                   // ---- NEW DETAILED LOGGING END ----
 
-                    scrollToOffset(pendingScrollOffset, localOffsetToScroll); // Call existing function
+                    scrollToOffset(offsetToScrollTo, offsetToScrollTo); // localOffset is same as global in full content
                   } else {
                     console.log(`[DocumentViewer pendingScrollEffect] setTimeout: pendingScrollOffset became null before scrollToOffset call.`);
                   }
                   setPendingScrollOffset(null); // Clear pending offset after attempting scroll
                 }, 50);
-
-              } else {
-                console.log(`[DocumentViewer pendingScrollEffect] Current page ${currentPage} does NOT match target page ${targetPageForPendingScroll} for pending scroll ${pendingScrollOffset}. This should ideally not happen if page navigation was successful. Clearing pending offset.`);
-                setPendingScrollOffset(null); // Clear if pages don't match to prevent stale scrolls
-              }
             }
           } else {
-            console.warn(`DocumentViewer: No content received for page ${currentPage}, document ${documentId}.`);
-            setCurrentPageContent(null);
-            setPendingScrollOffset(null); // Clear pending scroll if page load failed
+            console.warn(`DocumentViewer: No full content received for document ${documentId}.`);
+            setFullDocumentContent(null);
+            setPendingScrollOffset(null); // Clear pending scroll if content load failed
           }
         })
         .catch(error => {
-          console.error(`DocumentViewer: Error fetching page ${currentPage} for document ${documentId}:`, error);
-          setCurrentPageContent(null);
-          setPendingScrollOffset(null); // Clear pending scroll if page load failed
+          console.error(`DocumentViewer: Error fetching full content for document ${documentId}:`, error);
+          setFullDocumentContent(null);
+          setPendingScrollOffset(null); // Clear pending scroll if content load failed
         })
         .finally(() => {
-          setIsPageLoading(false);
+          setIsContentLoading(false);
         });
     }
-  }, [documentId, currentPage, documentMetadata, pendingScrollOffset]); // Added pendingScrollOffset to dependencies
+  // Removed currentPage from dependencies, documentMetadata is used as a trigger.
+  // pendingScrollOffset is kept to re-run if it changes while content is already loaded.
+  }, [documentId, documentMetadata, pendingScrollOffset]);
 
 
-  // Reset current page to 1 when documentId changes
+  // Reset current page to 1 when documentId changes // This whole useEffect can be removed if setCurrentPage was its only job.
+  // useEffect(() => {
+    // setCurrentPage(1); // No longer needed
+    // setPendingScrollOffset(null); // Clear any pending scroll from a previous document - This is still useful
+  // }, [documentId]);
+  // Retaining the part of the useEffect that clears pendingScrollOffset on documentId change.
   useEffect(() => {
-    setCurrentPage(1);
-    setPendingScrollOffset(null); // Clear any pending scroll from a previous document
+    setPendingScrollOffset(null);
   }, [documentId]);
 
 
   useEffect(() => {
-    if (contentRef.current && currentPageContent) {
-      console.log("[DocumentViewer] Running setupTextSelection effect. currentPage:", currentPage, "Has currentPageContent:", !!currentPageContent);
-      const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
+    if (contentRef.current && fullDocumentContent) {
+      console.log("[DocumentViewer] Running setupTextSelection effect. Has fullDocumentContent:", !!fullDocumentContent);
+      // const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE; // Removed
       const cleanup = setupTextSelection(contentRef.current, (text: string, startOffset: number, endOffset: number, event: MouseEvent) => {
         // Log inside the callback
         console.log("[DocumentViewer] Text selection callback triggered!");
@@ -174,8 +174,9 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         console.log("[DocumentViewer] Local offsets (start/end):", startOffset, "/", endOffset);
         console.log("[DocumentViewer] Mouse event (clientX/clientY):", event.clientX, "/", event.clientY);
 
-        const globalStartOffset = currentPageGlobalStartOffset + startOffset;
-        const globalEndOffset = currentPageGlobalStartOffset + endOffset;
+        // With full document content, local offsets are global offsets
+        const globalStartOffset = startOffset;
+        const globalEndOffset = endOffset;
 
         setContextMenu({
           x: event.clientX,
@@ -187,13 +188,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       });
 
       return () => {
-        console.log("[DocumentViewer] Cleanup setupTextSelection effect. currentPage:", currentPage);
+        console.log("[DocumentViewer] Cleanup setupTextSelection effect.");
         cleanup();
       };
     } else {
-      console.log("[DocumentViewer] setupTextSelection effect: contentRef.current is null or no currentPageContent.");
+      console.log("[DocumentViewer] setupTextSelection effect: contentRef.current is null or no fullDocumentContent.");
     }
-  }, [currentPageContent, currentPage]);
+  }, [fullDocumentContent]); // Removed currentPage
 
   // Log contextMenu state changes
   useEffect(() => {
@@ -242,15 +243,15 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
       } else {
         console.warn(`[DocumentViewer scrollToOffset] Annotation element NOT found by querySelector for globalStartOffset ${globalStartOffset}. Using fallback percentage scroll.`);
-        if (currentPageContent) { // Fallback scrolling logic remains
-          const percentage = localOffsetToScroll / currentPageContent.length;
+        if (fullDocumentContent) { // Fallback scrolling logic remains, uses fullDocumentContent
+          const percentage = localOffsetToScroll / fullDocumentContent.length; // localOffsetToScroll is global here
           const scrollTop = contentRef.current.scrollHeight * percentage;
           const scrollContainerFallback = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
           if (scrollContainerFallback) {
             scrollContainerFallback.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
           }
         } else {
-          console.warn("[DocumentViewer scrollToOffset] Fallback scroll failed: currentPageContent is null.");
+          console.warn("[DocumentViewer scrollToOffset] Fallback scroll failed: fullDocumentContent is null.");
         }
       }
     } else {
@@ -296,21 +297,21 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot jump.");
         return;
       }
-      // It's okay if currentPageContent is not yet available for the target page,
+      // It's okay if fullDocumentContent is not yet available,
       // as pendingScrollOffset logic will handle scrolling after content load.
 
       console.log(`[DocumentViewer handleJumpToAnnotation] Called with globalStartOffset: ${globalStartOffsetFromEvent}`);
-      const targetPage = Math.floor(globalStartOffsetFromEvent / DEFAULT_CHUNK_SIZE) + 1;
-      const localOffsetForScroll = globalStartOffsetFromEvent % DEFAULT_CHUNK_SIZE;
-      console.log(`[DocumentViewer handleJumpToAnnotation] Calculated targetPage: ${targetPage}, localOffsetForScroll: ${localOffsetForScroll}, currentPage: ${currentPage}`);
+      // const targetPage = Math.floor(globalStartOffsetFromEvent / DEFAULT_CHUNK_SIZE) + 1; // No pages
+      // const localOffsetForScroll = globalStartOffsetFromEvent % DEFAULT_CHUNK_SIZE; // No local offset in this context
 
-      if (targetPage !== currentPage) {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Navigating to page ${targetPage}. Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
+      // If full content isn't loaded yet, set pending scroll. Otherwise, scroll immediately.
+      if (!fullDocumentContent) {
+        console.log(`[DocumentViewer handleJumpToAnnotation] Full content not loaded. Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
         setPendingScrollOffset(globalStartOffsetFromEvent);
-        setCurrentPage(targetPage);
       } else {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Already on target page ${currentPage}. Calling scrollToOffset directly.`);
-        scrollToOffset(globalStartOffsetFromEvent, localOffsetForScroll);
+        console.log(`[DocumentViewer handleJumpToAnnotation] Full content loaded. Calling scrollToOffset directly.`);
+        // For full content, localOffsetToScroll is the same as globalStartOffsetFromEvent
+        scrollToOffset(globalStartOffsetFromEvent, globalStartOffsetFromEvent);
       }
     };
 
@@ -320,9 +321,8 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       console.log("[DocumentViewer] Removing 'jumpToAnnotation' window event listener.");
       window.removeEventListener('jumpToAnnotation', eventHandler as EventListener);
     };
-    // Added documentMetadata to dependencies because it's used in the handler.
-    // currentPage is also used for comparison.
-  }, [documentMetadata, currentPage]);
+    // documentMetadata is used. fullDocumentContent is used to decide immediate scroll vs pending.
+  }, [documentMetadata, fullDocumentContent]);
 
   if (!documentId) {
     return (
@@ -396,43 +396,33 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     } else {
       console.log("highlightText: SSR guard PASSED. Proceeding with client-side logic. typeof window.document:", typeof window.document);
     }
-    // console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500)); // Removed
+    // console.log("highlightText: Called. Initial content snippet (first 500):", content.substring(0, 500));
 
     const tempDiv = window.document.createElement('div');
-    tempDiv.innerHTML = content; // content is currentPageContent
+    tempDiv.innerHTML = content; // content is fullDocumentContent
 
-    const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE;
+    // const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE; // Removed
 
-    // Filter annotations for the current page and adjust their offsets
+    // Annotations are already global. No need to filter by page or calculate local offsets here.
+    // All annotations for the document are relevant.
     const annotationsToDisplay = annotations
-      .map(ann => ({
-        ...ann,
-        // Calculate local offsets relative to the current page's content
-        localStart: ann.startOffset - currentPageGlobalStartOffset,
-        localEnd: ann.endOffset - currentPageGlobalStartOffset,
-      }))
-      .filter(ann => {
-        // Check if the annotation (original global offsets) overlaps with the current page's global range
-        const pageGlobalEndOffset = currentPageGlobalStartOffset + content.length;
-        const annotationOverlapsPage = ann.startOffset < pageGlobalEndOffset && ann.endOffset > currentPageGlobalStartOffset;
-        return annotationOverlapsPage;
-      })
-      // Sort by original global start offset to maintain highlighting order (e.g., for nested or overlapping annotations)
-      .sort((a, b) => b.startOffset - a.startOffset); // Descending for processing from end of page content
+      // Sort by original global start offset to maintain highlighting order
+      .sort((a, b) => b.startOffset - a.startOffset); // Descending for processing from end of content
 
-    console.log(`DocumentViewer: Highlighting. Page: ${currentPage}. Filtered ${annotationsToDisplay.length} annotations from ${annotations.length} total.`);
+    console.log(`DocumentViewer: Highlighting. Displaying ${annotationsToDisplay.length} annotations from ${annotations.length} total.`);
 
     for (const annotation of annotationsToDisplay) {
-      const clampedLocalStart = Math.max(0, annotation.localStart);
-      const clampedLocalEnd = Math.min(content.length, annotation.localEnd);
+      // Offsets are already global and relative to the full content.
+      const clampedLocalStart = Math.max(0, annotation.startOffset);
+      const clampedLocalEnd = Math.min(content.length, annotation.endOffset);
 
       if (clampedLocalStart >= clampedLocalEnd) {
-        console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}, Page ${currentPage}. Skipping as clampedLocalStart (${clampedLocalStart}) >= clampedLocalEnd (${clampedLocalEnd}). Original global: ${annotation.startOffset}-${annotation.endOffset}, Local: ${annotation.localStart}-${annotation.localEnd}.`);
+        console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}. Skipping as clampedStart (${clampedLocalStart}) >= clampedEnd (${clampedLocalEnd}). Original global: ${annotation.startOffset}-${annotation.endOffset}.`);
         continue;
       }
 
-      console.log( // This is the existing "PROCESSED annotation" log, adjusted slightly
-        `[highlightText TreeWalker] Processing Ann ID ${annotation.id}, Page ${currentPage}. Global: ${annotation.startOffset}-${annotation.endOffset}. Seeking localStart: ${annotation.localStart} (clamped: ${clampedLocalStart}), localEnd: ${annotation.localEnd} (clamped: ${clampedLocalEnd}). Content length: ${content.length}`
+      console.log(
+        `[highlightText TreeWalker] Processing Ann ID ${annotation.id}. Global: ${annotation.startOffset}-${annotation.endOffset}. Clamped: ${clampedLocalStart}-${clampedLocalEnd}. Content length: ${content.length}`
       );
 
       if (isNaN(clampedLocalStart) || isNaN(clampedLocalEnd)) {
@@ -477,7 +467,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             endNodeOffsetInText = clampedLocalEnd - currentWalkerOffset;
             console.log(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode! endNodeOffsetInText: ${endNodeOffsetInText}. Node text: "${endNode.textContent?.substring(0,100).replace(/\n/g, ' ')}"`);
             if (startNode === null) {
-              console.error(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode BUT startNode is still null! This is an error. ClampedLocalStart: ${clampedLocalStart}`);
+            console.error(`[highlightText TreeWalker] Ann ID ${annotation.id}: Found endNode BUT startNode is still null! This is an error. ClampedStart: ${clampedLocalStart}`);
             }
             break;
           }
@@ -511,10 +501,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
               spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
             }
           } catch (e) {
-            console.error(`highlightText: Error in surroundContents for ann ID ${annotation.id} on page ${currentPage}`, {
+          console.error(`highlightText: Error in surroundContents for ann ID ${annotation.id}`, {
               error: e,
-              clampedLocalStart,
-              clampedLocalEnd,
+            clampedStart: clampedLocalStart, // Renamed for clarity
+            clampedEnd: clampedLocalEnd,     // Renamed for clarity
               startNodeTextLength: (startNode?.textContent || "").length,
               endNodeTextLength: (endNode?.textContent || "").length,
               startNodeOffsetInText,
@@ -523,7 +513,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             });
           }
         } else {
-          console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id} on page ${currentPage}. ClampedLocalStart: ${clampedLocalStart}, ClampedLocalEnd: ${clampedLocalEnd}`);
+        console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. ClampedStart: ${clampedLocalStart}, ClampedEnd: ${clampedLocalEnd}`);
         }
       }
     }
@@ -546,27 +536,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             </div>
             {/* Zoom Controls and Pagination */}
             <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1 || isPageLoading}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                Page {currentPage} of {documentMetadata.totalPages || 1}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(documentMetadata.totalPages || 1, p + 1))}
-                disabled={currentPage === (documentMetadata.totalPages || 1) || isPageLoading}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
+              {/* Pagination controls removed */}
+              {/* Informational display of totalPages (if desired) can go here, but not as interactive buttons */}
+              {documentMetadata.totalPages && (
+                 <span className="text-sm text-muted-foreground whitespace-nowrap">
+                   (Original Chunks: {documentMetadata.totalPages || 'N/A'}) {/* Example informational display */}
+                 </span>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -594,20 +570,20 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           className="bg-white border border-border rounded-lg shadow-sm p-8 leading-relaxed text-sm min-h-96 relative"
           style={{ fontSize: `${zoom}%` }}
         >
-          {isPageLoading && (
+          {isContentLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           )}
-          {!isPageLoading && currentPageContent && (
+          {!isContentLoading && fullDocumentContent && (
             <div
               dangerouslySetInnerHTML={{
-                __html: highlightText(currentPageContent)
+                __html: highlightText(fullDocumentContent)
               }}
               className="whitespace-pre-wrap"
             />
           )}
-          {!isPageLoading && !currentPageContent && (
+          {!isContentLoading && !fullDocumentContent && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <p className="text-lg font-medium text-muted-foreground">
@@ -622,31 +598,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         </div>
 
         {/* Pagination controls at the bottom as well */}
-        {documentMetadata.totalPages && documentMetadata.totalPages > 1 && (
-          <div className="mt-6 flex justify-center items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1 || isPageLoading}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {documentMetadata.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.min(documentMetadata.totalPages, p + 1))}
-              disabled={currentPage === documentMetadata.totalPages || isPageLoading}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
+        {/* Bottom pagination controls removed */}
 
         {/* Context Menu */}
         {contextMenu && (
