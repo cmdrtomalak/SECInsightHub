@@ -22,7 +22,7 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
     queryKey: ["/api/companies/search", searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
-      const response = await fetch(`/api/companies/search?q=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/companies/search?q=${encodeURIComponent(searchQuery)}`);
       if (!response.ok) throw new Error("Failed to search companies");
       return response.json();
     },
@@ -33,7 +33,7 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
     queryKey: ["/api/sec/company", selectedCompany?.cik, "filings"],
     queryFn: async () => {
       if (!selectedCompany) return null;
-      const response = await fetch(`/api/sec/company/${selectedCompany.cik}/filings`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/sec/company/${selectedCompany.cik}/filings`);
       if (!response.ok) throw new Error("Failed to fetch SEC filings");
       return response.json();
     },
@@ -91,7 +91,7 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
       let companyData;
       try {
         // Try to get existing company first
-        const existingResponse = await fetch(`/api/companies/${company.cik}`);
+        const existingResponse = await fetch(`${import.meta.env.BASE_URL}api/companies/${company.cik}`);
         if (existingResponse.ok) {
           companyData = await existingResponse.json();
         } else {
@@ -107,7 +107,7 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
       }
 
       // Check if document already exists
-      const existingDocResponse = await fetch(`/api/documents/recent?limit=100`);
+      const existingDocResponse = await fetch(`${import.meta.env.BASE_URL}api/documents/recent?limit=100`);
       if (existingDocResponse.ok) {
         const existingDocs = await existingDocResponse.json();
         const duplicateDoc = existingDocs.find((doc: any) => 
@@ -132,7 +132,7 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
         description: "Fetching SEC document content...",
       });
 
-      const contentResponse = await fetch(`/api/sec/document?url=${encodeURIComponent(documentUrl)}`);
+      const contentResponse = await fetch(`${import.meta.env.BASE_URL}api/sec/document?url=${encodeURIComponent(documentUrl)}`);
       let content = "Content not available - document may be too large or in unsupported format";
       
       if (contentResponse.ok) {

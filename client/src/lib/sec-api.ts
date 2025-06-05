@@ -52,7 +52,7 @@ export async function searchSECCompanies(query: string): Promise<SECCompany[]> {
   try {
     // This would typically use the SEC company tickers API
     // For now, we'll use a simplified approach
-    const response = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`${import.meta.env.BASE_URL}api/companies/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error("Failed to search SEC companies");
     return response.json();
   } catch (error) {
@@ -63,7 +63,7 @@ export async function searchSECCompanies(query: string): Promise<SECCompany[]> {
 
 export async function getSECCompanyFilings(cik: string): Promise<SECSubmission | null> {
   try {
-    const response = await fetch(`/api/sec/company/${cik}/filings`);
+    const response = await fetch(`${import.meta.env.BASE_URL}api/sec/company/${cik}/filings`);
     if (!response.ok) throw new Error("Failed to fetch SEC filings");
     return response.json();
   } catch (error) {
@@ -74,7 +74,7 @@ export async function getSECCompanyFilings(cik: string): Promise<SECSubmission |
 
 export async function getSECDocumentFullContent(documentId: number): Promise<string | null> {
   try {
-    const response = await fetch(`/api/documents/${documentId}/full-content`);
+    const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}/full-content`);
     if (response.ok) {
       const data = await response.json();
       return data.content; // Assuming the server sends { content: "..." }
@@ -93,7 +93,7 @@ export async function getSECDocumentFullContent(documentId: number): Promise<str
 
 export async function getSECDocument(url: string): Promise<string | null> {
   try {
-    const response = await fetch(`/api/sec/document?url=${encodeURIComponent(url)}`);
+    const response = await fetch(`${import.meta.env.BASE_URL}api/sec/document?url=${encodeURIComponent(url)}`);
     if (!response.ok) throw new Error("Failed to fetch SEC document");
     const data = await response.json();
     return data.content;
@@ -140,7 +140,7 @@ export function filterFilings(filings: SECFiling[], formTypes: string[] = ["10-K
 
 export async function getSECDocumentPage(documentId: number, pageNumber: number): Promise<DocumentChunk | null> {
   try {
-    const response = await fetch(`/api/documents/${documentId}/page/${pageNumber}`);
+    const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}/page/${pageNumber}`);
     if (!response.ok) {
       if (response.status === 404) {
         console.warn(`Document page not found: docId=${documentId}, page=${pageNumber}`);
