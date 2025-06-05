@@ -3,7 +3,7 @@ import {
   type Company, type Document, type Annotation, type InsertCompany, type InsertDocument, type InsertAnnotation, type InsertDocumentChunk, type DocumentChunk
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, like, or, sql, and } from "drizzle-orm";
+import { eq, desc, like, or, sql, and, asc } from "drizzle-orm";
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB in characters
 
@@ -22,6 +22,7 @@ export interface IStorage {
   getRecentDocuments(limit: number): Promise<(Document & { companyName: string })[]>;
   getDocumentChunk(documentId: number, pageNumber: number): Promise<DocumentChunk | undefined>;
   getCompanyDocuments(companyId: number): Promise<Document[]>;
+  getFullDocumentContent(documentId: number): Promise<string | null>;
 
   // Annotation methods
   getDocumentAnnotations(documentId: number): Promise<Annotation[]>;
@@ -32,6 +33,26 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async getFullDocumentContent(documentId: number): Promise<string | null> {
+    console.log(`[Storage getFullDocumentContent] Attempting to retrieve all chunks for document ID ${documentId}`);
+    const chunks = await db
+      .select()
+      .from(documentChunks)
+      .where(eq(documentChunks.documentId, documentId))
+      .orderBy(asc(documentChunks.pageNumber)); // Ensure 'asc' is imported from 'drizzle-orm'
+
+    if (!chunks || chunks.length === 0) {
+      console.log(`[Storage getFullDocumentContent] No chunks found for document ID ${documentId}`);
+      return null;
+    }
+
+    console.log(`[Storage getFullDocumentContent] Retrieved ${chunks.length} chunks for document ID ${documentId}`);
+    const fullContent = chunks.map(chunk => chunk.content).join('');
+    console.log(`[Storage getFullDocumentContent] Concatenated content length for document ID ${documentId}: ${fullContent.length}`);
+    // Return null if fullContent is empty, otherwise return fullContent
+    return fullContent === '' ? null : fullContent;
+  }
+
   async getCompanyByCik(cik: string): Promise<Company | undefined> {
     const [company] = await db.select().from(companies).where(eq(companies.cik, cik));
     return company || undefined;
