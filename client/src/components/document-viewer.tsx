@@ -475,45 +475,130 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         }
 
         if (startNode && endNode) {
-          const range = window.document.createRange();
-          try {
-            // Ensure offsets are not out of bounds for the specific text nodes
-            startNodeOffsetInText = Math.min(startNodeOffsetInText, (startNode.textContent || "").length);
-            endNodeOffsetInText = Math.min(endNodeOffsetInText, (endNode.textContent || "").length);
+          const baseClass = "annotation-highlight";
+          const annotationIdStr = annotation.id.toString();
+          const globalAnnotationStartStr = annotation.startOffset.toString(); // Key for scrolling
 
-            range.setStart(startNode, startNodeOffsetInText);
-            range.setEnd(endNode, endNodeOffsetInText);
+          const addMarkerIfNeeded = (referenceNode: Node) => {
+              if (annotation.note && referenceNode.parentNode) {
+                  const markerNode = window.document.createTextNode(' 📝');
+                  referenceNode.parentNode.insertBefore(markerNode, referenceNode.nextSibling);
+              }
+          };
 
-            const spanElement = window.document.createElement('span');
-            spanElement.className = "annotation-highlight";
-            spanElement.classList.add(bgColorClass);
-            spanElement.setAttribute('data-annotation-id', annotation.id.toString());
-            // IMPORTANT: data-annotation-start should store the GLOBAL start offset for jump functionality
-            spanElement.setAttribute('data-annotation-start', annotation.startOffset.toString());
-            if (annotation.note) {
-              spanElement.setAttribute('title', annotation.note);
-            }
-            range.surroundContents(spanElement);
+          if (startNode === endNode) {
+              try {
+                  const range = window.document.createRange();
+                  // Use the already calculated startNodeOffsetInText and endNodeOffsetInText
+                  // Ensure offsets are within the bounds of the specific text node's content
+                  const SNodeOffset = Math.min(startNodeOffsetInText, (startNode.textContent || "").length);
+                  const ENodeOffset = Math.min(endNodeOffsetInText, (startNode.textContent || "").length);
 
-            const annotationMarkerText = annotation.note ? ' 📝' : '';
-            if (annotationMarkerText && spanElement.parentNode) {
-              const markerNode = window.document.createTextNode(annotationMarkerText);
-              spanElement.parentNode.insertBefore(markerNode, spanElement.nextSibling);
-            }
-          } catch (e) {
-          console.error(`highlightText: Error in surroundContents for ann ID ${annotation.id}`, {
-              error: e,
-            clampedStart: clampedLocalStart, // Renamed for clarity
-            clampedEnd: clampedLocalEnd,     // Renamed for clarity
-              startNodeTextLength: (startNode?.textContent || "").length,
-              endNodeTextLength: (endNode?.textContent || "").length,
-              startNodeOffsetInText,
-              endNodeOffsetInText,
-              rangeString: range.toString().substring(0,100)
-            });
+                  range.setStart(startNode, SNodeOffset);
+                  range.setEnd(startNode, ENodeOffset); // Use startNode here as it's the same as endNode
+
+                  const spanElement = window.document.createElement('span');
+                  spanElement.className = `${baseClass} ${bgColorClass}`;
+                  spanElement.setAttribute('data-annotation-id', annotationIdStr);
+                  spanElement.setAttribute('data-annotation-start', globalAnnotationStartStr);
+                  if (annotation.note) {
+                      spanElement.setAttribute('title', annotation.note);
+                  }
+                  range.surroundContents(spanElement);
+                  addMarkerIfNeeded(spanElement);
+              } catch (e) {
+                  console.error(`highlightText (single-node): Error for ann ID ${annotation.id}`, {
+                      error: e,
+                      clampedStart: clampedLocalStart,
+                      clampedEnd: clampedLocalEnd,
+                      startNodeOffset: startNodeOffsetInText,
+                      endNodeOffset: endNodeOffsetInText,
+                      nodeLength: (startNode.textContent || "").length,
+                      rangeString: range.toString().substring(0,100)
+                  });
+              }
+          } else { // startNode !== endNode - Multi-node highlighting
+              // 1. Highlight startNode
+              try {
+                  const rangeStart = window.document.createRange();
+                  const SNodeOffset = Math.min(startNodeOffsetInText, (startNode.textContent || "").length);
+                  rangeStart.setStart(startNode, SNodeOffset);
+                  rangeStart.setEnd(startNode, (startNode.textContent || "").length); // Highlight to the end of the startNode
+
+                  const spanElementStart = window.document.createElement('span');
+                  spanElementStart.className = `${baseClass} ${bgColorClass}`;
+                  spanElementStart.setAttribute('data-annotation-id', annotationIdStr);
+                  spanElementStart.setAttribute('data-annotation-start', globalAnnotationStartStr);
+                  // No title or marker on partial segments usually, unless it's the only segment.
+                  // Here, title and marker will be on the end segment.
+                  rangeStart.surroundContents(spanElementStart);
+              } catch (e) {
+                  console.error(`highlightText (multi-node start): Error for ann ID ${annotation.id}`, {
+                      error: e,
+                      clampedStart: clampedLocalStart,
+                      startNodeOffset: startNodeOffsetInText,
+                      nodeLength: (startNode.textContent || "").length
+                  });
+              }
+
+              // 2. Highlight nodes in between
+              // Use a new TreeWalker that starts from the tempDiv root.
+              // This ensures it's independent of the outer walker's state.
+              const intermediateWalker = window.document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
+              let activeHighlighting = false;
+              let tempCurrentNode;
+              while (tempCurrentNode = intermediateWalker.nextNode()) {
+                  if (tempCurrentNode === startNode) {
+                      activeHighlighting = true;
+                      continue; // Start node handled
+                  }
+                  if (tempCurrentNode === endNode) {
+                      activeHighlighting = false; // Stop before processing end node
+                      break;
+                  }
+                  if (activeHighlighting && tempCurrentNode.textContent && tempCurrentNode.textContent.trim() !== '') {
+                      try {
+                          const rangeMiddle = document.createRange();
+                          rangeMiddle.selectNodeContents(tempCurrentNode); // Highlight the entire text node
+                          const spanElementMiddle = document.createElement('span');
+                          spanElementMiddle.className = `${baseClass} ${bgColorClass}`;
+                          spanElementMiddle.setAttribute('data-annotation-id', annotationIdStr);
+                          spanElementMiddle.setAttribute('data-annotation-start', globalAnnotationStartStr);
+                          rangeMiddle.surroundContents(spanElementMiddle);
+                      } catch (e) {
+                          console.error(`highlightText (multi-node middle): Error for ann ID ${annotation.id} on node`, tempCurrentNode, e);
+                      }
+                  }
+              }
+
+              // 3. Highlight endNode
+              try {
+                  const rangeEnd = window.document.createRange();
+                  const ENodeOffset = Math.min(endNodeOffsetInText, (endNode.textContent || "").length);
+                  rangeEnd.setStart(endNode, 0); // Highlight from the beginning of the endNode
+                  rangeEnd.setEnd(endNode, ENodeOffset);
+
+                  const spanElementEnd = window.document.createElement('span');
+                  spanElementEnd.className = `${baseClass} ${bgColorClass}`;
+                  spanElementEnd.setAttribute('data-annotation-id', annotationIdStr);
+                  spanElementEnd.setAttribute('data-annotation-start', globalAnnotationStartStr);
+                  if (annotation.note) { // Add title to the last segment
+                      spanElementEnd.setAttribute('title', annotation.note);
+                  }
+                  rangeEnd.surroundContents(spanElementEnd);
+                  addMarkerIfNeeded(spanElementEnd); // Add marker after the last segment
+              } catch (e) {
+                  console.error(`highlightText (multi-node end): Error for ann ID ${annotation.id}`, {
+                      error: e,
+                      clampedEnd: clampedLocalEnd,
+                      endNodeOffset: endNodeOffsetInText,
+                      nodeLength: (endNode.textContent || "").length
+                  });
+              }
           }
         } else {
-        console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. ClampedStart: ${clampedLocalStart}, ClampedEnd: ${clampedLocalEnd}`);
+            // Original warning if start/end nodes not found
+            console.warn(`highlightText: Failed to find start/end nodes for ann ID ${annotation.id}. ClampedStart: ${clampedLocalStart}, ClampedEnd: ${clampedLocalEnd}`);
         }
       }
     }
