@@ -162,7 +162,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 2. Fetch content from SEC using validatedData.documentUrl
       let fullContent: string;
       try {
-        console.log(`[Server] POST /api/documents: Fetching content from SEC URL: ${validatedData.documentUrl}`);
         const secFetchResponse = await fetch(validatedData.documentUrl, {
           headers: { 'User-Agent': 'SEC Document Analyzer contact@example.com' },
         });
@@ -171,7 +170,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(502).json({ error: "Failed to fetch document content from SEC.", sec_status: secFetchResponse.status });
         }
         fullContent = await secFetchResponse.text();
-        console.log(`[Server] POST /api/documents: Successfully fetched content from SEC. Length: ${fullContent.length}`);
       } catch (fetchError) {
         console.error(`[Server] POST /api/documents: Network or other error fetching from SEC URL: ${validatedData.documentUrl}`, fetchError);
         return res.status(503).json({ error: "Service unavailable: Error fetching document from SEC." });
@@ -189,18 +187,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPages: 0,
       };
       const newDocumentMetadata = await storage.createDocument(documentToCreate);
-      console.log(`[Server] POST /api/documents: Created metadata for doc ID: ${newDocumentMetadata.id}, title: ${newDocumentMetadata.title}`);
 
       // 4. Process content (chunking)
       await storage.updateDocumentContent(newDocumentMetadata.id, fullContent);
-      console.log(`[Server] POST /api/documents: Finished chunking for doc ID: ${newDocumentMetadata.id}`);
 
       const finalDocument = await storage.getDocument(newDocumentMetadata.id);
       if (!finalDocument) {
         console.error("[Server] POST /api/documents: Critical error - Failed to retrieve document immediately after creation/update for ID:", newDocumentMetadata.id);
         return res.status(500).json({ error: "Internal server error: Failed to retrieve document after import." });
       }
-      console.log(`[Server] POST /api/documents: Successfully created and chunked document ID: ${finalDocument.id}, Total Pages: ${finalDocument.totalPages}`);
       res.status(201).json(finalDocument);
 
     } catch (error) {
@@ -218,7 +213,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const { content, totalPages } = req.body; // totalPages from body will be ignored by storage.updateDocumentContent
-      console.log(`[PATCH /api/documents/:id/content] Received content for document ID ${id}. Content length: ${content?.length}, Input totalPages (ignored): ${totalPages}`);
       
       if (typeof content !== 'string') { // Ensure content is a string
         return res.status(400).json({ error: "Content is required and must be a string" });
@@ -360,8 +354,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const content = await response.text();
-      console.log(`[/api/sec/document] Fetched content from SEC. URL: ${url}, Content length: ${content?.length}`);
-      console.log(`[/api/sec/document] Sending content to client. URL: ${url}, Content length: ${content?.length}`);
       res.json({ content });
     } catch (error) {
       console.error("Error fetching SEC document:", error);
