@@ -58,6 +58,8 @@ export default function CompanySearch({ onDocumentSelect }: CompanySearchProps) 
         title: "Document imported",
         description: "SEC document has been added to your library.",
       });
+      // Invalidate the recent documents query to trigger a refetch
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
       onDocumentSelect(newDocument.id);
     },
     onError: () => {
