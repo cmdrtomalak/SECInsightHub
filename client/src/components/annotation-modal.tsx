@@ -212,7 +212,7 @@ export default function AnnotationModal({
             </Label>
             <Textarea
               id="annotation-note-textarea"
-              className="mt-2 resize-none"
+              className="mt-2 resize-none text-foreground" // Added text-foreground
               rows={3}
               placeholder="Add your note here..."
               value={note}

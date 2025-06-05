@@ -367,16 +367,18 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   const getHighlightBackgroundColorClass = (color: string): string => {
     switch (color) {
-      case 'orange':
-        return 'highlight-bg-orange';
+      case 'orange': // Assuming 'orange' is the color set for 'note' types that need dark pink
+        return 'highlight-bg-dark-pink';
       case 'green':
         return 'highlight-bg-green';
-      case 'pink':
-        return 'highlight-bg-pink';
+      // case 'pink': // Original pink, if different from dark pink, can be re-added if needed.
+      //  return 'highlight-bg-pink';
       case 'blue':
         return 'highlight-bg-blue';
-      default:
-        return 'highlight-bg-default'; // Default to orange-like highlight
+      case 'pink': // Explicitly handle 'pink' if it's different from 'dark-pink'
+        return 'highlight-bg-pink'; // This was the original mapping for 'pink'
+      default: // Default could be yellow or another distinct color
+        return 'highlight-bg-yellow'; // Changed default to yellow
     }
   };
 
@@ -487,30 +489,29 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
                 range.setEnd(currentNode, highlightEndInNode);
 
                 const spanElement = window.document.createElement('span');
-                // Base class for all annotation spans, can be used for targeting.
-                spanElement.className = "annotation-span";
-
-                if (currentAnnotation.type === 'highlight') {
-                  // Add highlight-specific class for background color
-                  spanElement.classList.add(`annotation-highlight`);
-                  spanElement.classList.add(getHighlightBackgroundColorClass(currentAnnotation.color));
-                }
-                // For 'note' type, no explicit background color class is added unless getHighlightBackgroundColorClass handles it.
-                // If 'note' type also has a 'color' property that should be used for background,
-                // then the condition `if (currentAnnotation.type === 'highlight')` around addClass could be removed or adjusted.
-                // Assuming for now only 'highlight' type gets colored background.
-
                 spanElement.setAttribute('data-annotation-id', currentAnnotation.id.toString());
                 spanElement.setAttribute('data-annotation-start', currentAnnotation.startOffset.toString());
 
-                // Apply title if this segment is the one where the annotation logically "ends"
-                if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
+                spanElement.classList.add("annotation-span"); // Base class for all annotation-related spans
+
+                // Apply visual highlighting and specific color if the annotation type is 'highlight' or 'note'.
+                // This assumes 'notes' are also meant to be visually highlighted on the text.
+                if (currentAnnotation.type === 'highlight' || currentAnnotation.type === 'note') {
+                    spanElement.classList.add("annotation-highlight"); // General class for highlighted appearance
+                    const bgColorClass = getHighlightBackgroundColorClass(currentAnnotation.color);
+                    if (bgColorClass) { // Apply specific background color if one is resolved
+                        spanElement.classList.add(bgColorClass);
+                    }
+                }
+
+                // Add title attribute if a note exists, regardless of type
+                if (currentAnnotation.note) {
                    spanElement.setAttribute('title', currentAnnotation.note);
                 }
 
                 range.surroundContents(spanElement);
 
-                // Add marker if this segment is the very end of the annotation and it has a note
+                // Add marker if this segment is the very end of the annotation AND it has a note
                 if (currentAnnotation.note && (nodeStart + highlightEndInNode) >= currentAnnotation.endOffset) {
                     if (spanElement.parentNode) { // Check parentNode before insertBefore
                        const markerNode = window.document.createTextNode(' 📝');

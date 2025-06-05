@@ -69,11 +69,13 @@
 }
 
 /* Added for annotation highlights */
-.highlight-bg-orange { background-color: #fed7aa !important; }
+.highlight-bg-orange { background-color: #fed7aa !important; } /* Original orange, might be less used now if 'orange' maps to dark-pink in JS */
 .highlight-bg-green { background-color: #bbf7d0 !important; }
-.highlight-bg-pink { background-color: #fce7f3 !important; }
+.highlight-bg-pink { background-color: #fce7f3 !important; } /* Original light pink */
 .highlight-bg-blue { background-color: #dbeafe !important; }
-.highlight-bg-default { background-color: #fed7aa !important; } /* Default fallback */
+.highlight-bg-dark-pink { background-color: rgba(199, 21, 133, 0.5) !important; } /* MediumVioletRed with transparency */
+.highlight-bg-yellow { background-color: rgba(255, 255, 0, 0.4) !important; } /* Yellow for default */
+.highlight-bg-default { background-color: rgba(255, 255, 0, 0.4) !important; } /* Default fallback, now yellow */
 
 /* It's good practice to also ensure the text color contrasts well, though this was not the original issue */
 .annotation-highlight {
