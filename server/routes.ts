@@ -1,13 +1,13 @@
-import type { Express } from "express";
+import type { Express, Router } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCompanySchema, insertDocumentSchema, insertAnnotationSchema, type InsertDocument } from "@shared/schema";
 import { z } from "zod";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(router: Router): Promise<void> {
   
   // Company routes
-  app.get("/api/companies/search", async (req, res) => {
+  router.get("/api/companies/search", async (req, res) => {
     try {
       const { q } = req.query;
       if (!q || typeof q !== 'string') {
@@ -67,7 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/companies/:cik", async (req, res) => {
+  router.get("/api/companies/:cik", async (req, res) => {
     try {
       const { cik } = req.params;
       const company = await storage.getCompanyByCik(cik);
@@ -83,7 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/companies", async (req, res) => {
+  router.post("/api/companies", async (req, res) => {
     try {
       const companyData = insertCompanySchema.parse(req.body);
       const company = await storage.createCompany(companyData);
@@ -97,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Document routes
 
   // New endpoint to get the full content of a document
-  app.get("/api/documents/:documentId/full-content", async (req, res) => {
+  router.get("/api/documents/:documentId/full-content", async (req, res) => {
     try {
       const documentId = parseInt(req.params.documentId);
 
@@ -120,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/documents/recent", async (req, res) => {
+  router.get("/api/documents/recent", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
       const documents = await storage.getRecentDocuments(limit);
@@ -131,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/documents/:id", async (req, res) => {
+  router.get("/api/documents/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const document = await storage.getDocument(id);
@@ -150,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/companies/:cik/documents", async (req, res) => {
+  router.get("/api/companies/:cik/documents", async (req, res) => {
     try {
       const { cik } = req.params;
       const company = await storage.getCompanyByCik(cik);
@@ -167,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/documents", async (req, res) => {
+  router.post("/api/documents", async (req, res) => {
     try {
       const incomingData = req.body;
 
@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/documents/:id/content", async (req, res) => {
+  router.patch("/api/documents/:id/content", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { content, totalPages } = req.body; // totalPages from body will be ignored by storage.updateDocumentContent
@@ -252,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // New endpoint to get a specific page/chunk of a document
-  app.get("/api/documents/:documentId/page/:pageNumber", async (req, res) => {
+  router.get("/api/documents/:documentId/page/:pageNumber", async (req, res) => {
     try {
       const documentId = parseInt(req.params.documentId);
       const pageNumber = parseInt(req.params.pageNumber);
@@ -275,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Annotation routes
-  app.get("/api/documents/:id/annotations", async (req, res) => {
+  router.get("/api/documents/:id/annotations", async (req, res) => {
     try {
       const documentId = parseInt(req.params.id);
       const annotations = await storage.getDocumentAnnotations(documentId);
@@ -286,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/annotations", async (req, res) => {
+  router.post("/api/annotations", async (req, res) => {
     try {
       const annotationData = insertAnnotationSchema.parse(req.body);
       const annotation = await storage.createAnnotation(annotationData);
@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/annotations/:id", async (req, res) => {
+  router.patch("/api/annotations/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updates = req.body;
@@ -310,7 +310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/annotations/:id", async (req, res) => {
+  router.delete("/api/annotations/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteAnnotation(id);
@@ -321,7 +321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/annotations/search", async (req, res) => {
+  router.get("/api/annotations/search", async (req, res) => {
     try {
       const { q } = req.query;
       if (!q || typeof q !== 'string') {
@@ -337,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SEC EDGAR API proxy routes
-  app.get("/api/sec/company/:cik/filings", async (req, res) => {
+  router.get("/api/sec/company/:cik/filings", async (req, res) => {
     try {
       const { cik } = req.params;
       const response = await fetch(
@@ -361,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/sec/document", async (req, res) => {
+  router.get("/api/sec/document", async (req, res) => {
     try {
       const { url } = req.query;
       if (!url || typeof url !== 'string') {
@@ -385,7 +385,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch SEC document" });
     }
   });
-
-  const httpServer = createServer(app);
-  return httpServer;
 }
