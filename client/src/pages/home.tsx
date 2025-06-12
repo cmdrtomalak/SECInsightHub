@@ -290,7 +290,7 @@ export default function Home() {
       // If we have a startOffset, jump to that annotation after a short delay
       if (startOffset !== undefined) {
         setTimeout(() => {
-          handleJumpToAnnotation(startOffset);
+          handleJumpToAnnotationEventDispatch(startOffset); // Changed this line
         }, 100);
       }
     } else {
