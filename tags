@@ -1,0 +1,47 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+0000_icy_kitty_pryde.sql	migrations/0000_icy_kitty_pryde.sql	1;"	F
+0001_majestic_vulture.sql	migrations/0001_majestic_vulture.sql	1;"	F
+annotations	migrations/0000_icy_kitty_pryde.sql	/^CREATE TABLE "annotations" ($/;"	t
+annotations.color	migrations/0000_icy_kitty_pryde.sql	/^	"color" text DEFAULT 'orange',$/;"	F
+annotations.created_at	migrations/0000_icy_kitty_pryde.sql	/^	"created_at" timestamp DEFAULT now(),$/;"	F
+annotations.document_id	migrations/0000_icy_kitty_pryde.sql	/^	"document_id" integer NOT NULL,$/;"	F
+annotations.end_offset	migrations/0000_icy_kitty_pryde.sql	/^	"end_offset" integer NOT NULL,$/;"	F
+annotations.id	migrations/0000_icy_kitty_pryde.sql	/^	"id" serial PRIMARY KEY NOT NULL,$/;"	F
+annotations.note	migrations/0000_icy_kitty_pryde.sql	/^	"note" text,$/;"	F
+annotations.page_number	migrations/0000_icy_kitty_pryde.sql	/^	"page_number" integer DEFAULT 1,$/;"	F
+annotations.selected_text	migrations/0000_icy_kitty_pryde.sql	/^	"selected_text" text NOT NULL,$/;"	F
+annotations.start_offset	migrations/0000_icy_kitty_pryde.sql	/^	"start_offset" integer NOT NULL,$/;"	F
+annotations.type	migrations/0000_icy_kitty_pryde.sql	/^	"type" text NOT NULL,$/;"	F
+annotations.updated_at	migrations/0000_icy_kitty_pryde.sql	/^	"updated_at" timestamp DEFAULT now()$/;"	F
+companies	migrations/0000_icy_kitty_pryde.sql	/^CREATE TABLE "companies" ($/;"	t
+companies.cik	migrations/0000_icy_kitty_pryde.sql	/^	"cik" text NOT NULL,$/;"	F
+companies.created_at	migrations/0000_icy_kitty_pryde.sql	/^	"created_at" timestamp DEFAULT now(),$/;"	F
+companies.id	migrations/0000_icy_kitty_pryde.sql	/^	"id" serial PRIMARY KEY NOT NULL,$/;"	F
+companies.name	migrations/0000_icy_kitty_pryde.sql	/^	"name" text NOT NULL,$/;"	F
+companies.ticker	migrations/0000_icy_kitty_pryde.sql	/^	"ticker" text,$/;"	F
+document_chunks	migrations/0001_majestic_vulture.sql	/^CREATE TABLE "document_chunks" ($/;"	t
+document_chunks.content	migrations/0001_majestic_vulture.sql	/^	"content" text NOT NULL,$/;"	F
+document_chunks.created_at	migrations/0001_majestic_vulture.sql	/^	"created_at" timestamp DEFAULT now()$/;"	F
+document_chunks.document_id	migrations/0001_majestic_vulture.sql	/^	"document_id" integer NOT NULL,$/;"	F
+document_chunks.id	migrations/0001_majestic_vulture.sql	/^	"id" serial PRIMARY KEY NOT NULL,$/;"	F
+document_chunks.page_number	migrations/0001_majestic_vulture.sql	/^	"page_number" integer NOT NULL,$/;"	F
+documents	migrations/0000_icy_kitty_pryde.sql	/^CREATE TABLE "documents" ($/;"	t
+documents.accession_number	migrations/0000_icy_kitty_pryde.sql	/^	"accession_number" text NOT NULL,$/;"	F
+documents.company_id	migrations/0000_icy_kitty_pryde.sql	/^	"company_id" integer NOT NULL,$/;"	F
+documents.content	migrations/0000_icy_kitty_pryde.sql	/^	"content" text,$/;"	F
+documents.created_at	migrations/0000_icy_kitty_pryde.sql	/^	"created_at" timestamp DEFAULT now(),$/;"	F
+documents.document_url	migrations/0000_icy_kitty_pryde.sql	/^	"document_url" text NOT NULL,$/;"	F
+documents.filing_date	migrations/0000_icy_kitty_pryde.sql	/^	"filing_date" text NOT NULL,$/;"	F
+documents.form_type	migrations/0000_icy_kitty_pryde.sql	/^	"form_type" text NOT NULL,$/;"	F
+documents.id	migrations/0000_icy_kitty_pryde.sql	/^	"id" serial PRIMARY KEY NOT NULL,$/;"	F
+documents.last_accessed_at	migrations/0000_icy_kitty_pryde.sql	/^	"last_accessed_at" timestamp DEFAULT now(),$/;"	F
+documents.report_date	migrations/0000_icy_kitty_pryde.sql	/^	"report_date" text,$/;"	F
+documents.title	migrations/0000_icy_kitty_pryde.sql	/^	"title" text NOT NULL,$/;"	F
+documents.total_pages	migrations/0000_icy_kitty_pryde.sql	/^	"total_pages" integer DEFAULT 1,$/;"	F
+index.html	client/index.html	1;"	F
+index.html	dist/public/index.html	1;"	F

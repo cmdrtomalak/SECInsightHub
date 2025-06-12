@@ -55,7 +55,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     queryKey: ["/api/documents", documentId, "metadata"],
     queryFn: async () => {
       if (!documentId) return null;
-      const response = await fetch(`/api/documents/${documentId}`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}`);
       console.log("DocumentViewer: Raw response for document METADATA, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch document metadata");
       const metadata = await response.json();
@@ -73,7 +73,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     queryKey: ["/api/documents", documentId, "annotations"], // This fetches ALL annotations for the document
     queryFn: async () => {
       if (!documentId) return [];
-      const response = await fetch(`/api/documents/${documentId}/annotations`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}/annotations`);
       console.log("DocumentViewer: Raw response for annotations, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch annotations");
       const annotationsData = await response.json();

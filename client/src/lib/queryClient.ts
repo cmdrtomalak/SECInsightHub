@@ -12,7 +12,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // Construct the full URL with BASE_URL
+  // Ensures that if url starts with '/', it's stripped to prevent double slashes
+  // e.g., if BASE_URL is /reader/ and url is /api/test, becomes /reader/api/test
+  // if BASE_URL is /reader/ and url is api/test, also becomes /reader/api/test
+  const pathSegment = url.startsWith('/') ? url.substring(1) : url;
+  const fullUrl = `${import.meta.env.BASE_URL}${pathSegment}`;
+
+  const res = await fetch(fullUrl, { // Use fullUrl here
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,

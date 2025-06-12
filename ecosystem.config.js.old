@@ -1,0 +1,12 @@
+module.exports = {
+  apps : [{
+    name   : "SECInsightHub",
+    script : "npm", // The command to run
+    args   : "run dev", // Arguments for the command
+    cwd    : "/home/bandit/dev/SECInsightHub", // Set the current working directory
+    env    : {
+      "NODE_ENV": "development", // Or whatever your app expects for dev
+      "DATABASE_URL": "postgres://neondb_owner:npg_QJNYf71gACVW@localhost:5432/neondb" // YOUR ACTUAL DATABASE URL
+    }
+  }]
+};
