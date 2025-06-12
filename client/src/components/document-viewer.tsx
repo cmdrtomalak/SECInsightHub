@@ -107,30 +107,28 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
                 // The concept of "localOffsetToScroll" becomes the global offset itself in full content view
                 const offsetToScrollTo = pendingScrollOffset;
 
-                setTimeout(() => {
-                  console.log(`[DocumentViewer pendingScrollEffect] setTimeout: Executing for global offset ${pendingScrollOffset}.`);
-
-                  // ---- NEW DETAILED LOGGING START ----
-                  if (pendingScrollOffset !== null) { // Re-check pendingScrollOffset as it might be cleared by a rapid subsequent event
-                    if (contentRef.current) {
-                      console.log(`[DocumentViewer pendingScrollEffect] setTimeout: contentRef.current is available.`);
-                      const element = contentRef.current.querySelector(`[data-annotation-start="${pendingScrollOffset}"]`) as HTMLElement;
-                      if (element) {
-                        console.log(`[DocumentViewer pendingScrollEffect] setTimeout: querySelector FOUND element:`, element);
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => { // Double rAF
+                    console.log(`[DocumentViewer pendingScrollEffect] rAF: Executing for global offset ${pendingScrollOffset}.`);
+                    if (pendingScrollOffset !== null) { // Re-check as state might have changed
+                      if (contentRef.current) {
+                        console.log(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is available.`);
+                        const element = contentRef.current.querySelector(`[data-annotation-start="${pendingScrollOffset}"]`) as HTMLElement;
+                        if (element) {
+                          console.log(`[DocumentViewer pendingScrollEffect] rAF: querySelector FOUND element:`, element);
+                        } else {
+                          console.warn(`[DocumentViewer pendingScrollEffect] rAF: querySelector DID NOT FIND element for offset ${pendingScrollOffset}.`);
+                        }
                       } else {
-                        console.warn(`[DocumentViewer pendingScrollEffect] setTimeout: querySelector DID NOT FIND element for offset ${pendingScrollOffset}.`);
+                        console.warn(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is NULL at time of query.`);
                       }
+                      scrollToOffset(offsetToScrollTo, offsetToScrollTo);
                     } else {
-                      console.warn(`[DocumentViewer pendingScrollEffect] setTimeout: contentRef.current is NULL at time of query.`);
+                      console.log(`[DocumentViewer pendingScrollEffect] rAF: pendingScrollOffset became null before scrollToOffset call.`);
                     }
-                  // ---- NEW DETAILED LOGGING END ----
-
-                    scrollToOffset(offsetToScrollTo, offsetToScrollTo); // localOffset is same as global in full content
-                  } else {
-                    console.log(`[DocumentViewer pendingScrollEffect] setTimeout: pendingScrollOffset became null before scrollToOffset call.`);
-                  }
-                  setPendingScrollOffset(null); // Clear pending offset after attempting scroll
-                }, 50);
+                    setPendingScrollOffset(null); // Clear pending offset
+                  });
+                });
             }
           } else {
             console.warn(`DocumentViewer: No full content received for document ${documentId}.`);
