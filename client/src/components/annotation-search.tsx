@@ -13,10 +13,10 @@ export default function AnnotationSearch({ onAnnotationSelect }: AnnotationSearc
   const [activeFilter, setActiveFilter] = useState<string>("all");
 
   const { data: annotations = [], isLoading } = useQuery({
-    queryKey: ["/api/annotations/search", searchQuery],
+    queryKey: ["/reader/api/annotations/search", searchQuery], // Changed
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
-      const response = await fetch(`/api/annotations/search?q=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(`/reader/api/annotations/search?q=${encodeURIComponent(searchQuery)}`); // Changed
       if (!response.ok) throw new Error("Failed to search annotations");
       return response.json();
     },

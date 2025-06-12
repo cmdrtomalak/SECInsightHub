@@ -226,7 +226,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchAnnotations(query: string): Promise<(Annotation & { documentTitle: string; companyName: string })[]> {
-    return await db
+    console.log("[Storage searchAnnotations] Received search query:", query); // Log input query
+
+    const dbQuery = db
       .select({
         id: annotations.id,
         documentId: annotations.documentId,
@@ -253,6 +255,14 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(annotations.createdAt))
       .limit(50);
+
+    console.log("[Storage searchAnnotations] SQL Query:", dbQuery.toSQL()); // Log SQL query
+
+    const results = await dbQuery;
+
+    console.log("[Storage searchAnnotations] Number of results from DB:", results.length); // Log number of results
+
+    return results;
   }
 }
 

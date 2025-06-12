@@ -324,6 +324,7 @@ export async function registerRoutes(router: Router): Promise<void> {
   router.get("/api/annotations/search", async (req, res) => {
     try {
       const { q } = req.query;
+      console.log("[Server Routes /api/annotations/search] Received search query:", q); // Added log
       if (!q || typeof q !== 'string') {
         return res.status(400).json({ error: "Query parameter 'q' is required" });
       }
