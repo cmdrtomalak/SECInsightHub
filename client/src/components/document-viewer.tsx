@@ -225,15 +225,24 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
           scrollContainer.scrollTo({
             top: scrollTopValue,
-            behavior: 'smooth'
+            behavior: 'auto' // Changed from 'smooth'
           });
 
-          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop AFTER attempting scrollTo: ${scrollContainer.scrollTop}`);
+          const scrollTopAfter = scrollContainer.scrollTop;
+          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop IMMEDIATELY AFTER attempting scrollTo: ${scrollTopAfter}`);
+
+          setTimeout(() => {
+            const scrollTopAfterDelay = scrollContainer.scrollTop;
+            console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop AFTER 100ms DELAY: ${scrollTopAfterDelay}`);
+            if (scrollTopAfterDelay !== scrollTopAfter) {
+              console.log(`[DocumentViewer scrollToOffset] scrollTop changed after delay. Initial attempt: ${scrollTopAfter}, After delay: ${scrollTopAfterDelay}`);
+            }
+          }, 100);
 
         } else {
           console.warn("[DocumentViewer scrollToOffset] Scroll container (.overflow-y-auto) not found. Using fallback scrollIntoView.");
           annotationElement.scrollIntoView({
-            behavior: 'smooth',
+            behavior: 'smooth', // Fallback scrollIntoView can remain smooth or be changed as well if desired. Keeping it smooth for now.
             block: 'start'
           });
         }
@@ -246,7 +255,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
           const scrollTop = contentRef.current.scrollHeight * percentage;
           const scrollContainerFallback = contentRef.current.closest('.overflow-y-auto') || contentRef.current.parentElement;
           if (scrollContainerFallback) {
-            scrollContainerFallback.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'smooth' });
+            scrollContainerFallback.scrollTo({ top: Math.max(0, scrollTop - 150), behavior: 'auto' }); // Changed fallback to 'auto' as well
           }
         } else {
           console.warn("[DocumentViewer scrollToOffset] Fallback scroll failed: fullDocumentContent is null.");
