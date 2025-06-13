@@ -93,61 +93,60 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   useEffect(() => {
     if (documentId && documentMetadata) {
       setIsContentLoading(true);
-      setFullDocumentContent(null);
+      setFullDocumentContent(null); // Reset content when documentId or metadata changes
       console.log(`DocumentViewer: Fetching full content for document ${documentId}`);
       getSECDocumentFullContent(documentId)
         .then(content => {
           if (content !== null) {
             console.log(`DocumentViewer: Received full content. Length: ${content.length}`);
             setFullDocumentContent(content);
-            // If there's a pending scroll, execute it now that content is loaded
-            // With full content, any pending scroll can be attempted directly.
-            if (pendingScrollOffset !== null) {
-                console.log(`[DocumentViewer pendingScrollEffect] Full content loaded. Attempting scroll for pending offset ${pendingScrollOffset}.`);
-                // The concept of "localOffsetToScroll" becomes the global offset itself in full content view
-                const offsetToScrollTo = pendingScrollOffset;
-
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => { // Double rAF
-                    console.log(`[DocumentViewer pendingScrollEffect] rAF: Executing for global offset ${pendingScrollOffset}.`);
-                    if (pendingScrollOffset !== null) { // Re-check as state might have changed
-                      if (contentRef.current) {
-                        console.log(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is available.`);
-                        const element = contentRef.current.querySelector(`[data-annotation-start="${pendingScrollOffset}"]`) as HTMLElement;
-                        if (element) {
-                          console.log(`[DocumentViewer pendingScrollEffect] rAF: querySelector FOUND element:`, element);
-                        } else {
-                          console.warn(`[DocumentViewer pendingScrollEffect] rAF: querySelector DID NOT FIND element for offset ${pendingScrollOffset}.`);
-                        }
-                      } else {
-                        console.warn(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is NULL at time of query.`);
-                      }
-                      scrollToOffset(offsetToScrollTo, offsetToScrollTo);
-                    } else {
-                      console.log(`[DocumentViewer pendingScrollEffect] rAF: pendingScrollOffset became null before scrollToOffset call.`);
-                    }
-                    setPendingScrollOffset(null); // Clear pending offset
-                  });
-                });
-            }
+            // Scroll logic is now handled by the new dedicated effect
           } else {
             console.warn(`DocumentViewer: No full content received for document ${documentId}.`);
             setFullDocumentContent(null);
-            setPendingScrollOffset(null); // Clear pending scroll if content load failed
+            // setPendingScrollOffset(null); // Pending scroll should persist if content load fails, new effect will not trigger
           }
         })
         .catch(error => {
           console.error(`DocumentViewer: Error fetching full content for document ${documentId}:`, error);
           setFullDocumentContent(null);
-          setPendingScrollOffset(null); // Clear pending scroll if content load failed
+          // setPendingScrollOffset(null); // Pending scroll should persist if content load fails
         })
         .finally(() => {
           setIsContentLoading(false);
         });
     }
-  // Removed currentPage from dependencies, documentMetadata is used as a trigger.
-  // pendingScrollOffset is kept to re-run if it changes while content is already loaded.
-  }, [documentId, documentMetadata, pendingScrollOffset]);
+  // Only re-run if documentId or documentMetadata changes.
+  // pendingScrollOffset is removed as a dependency here.
+  }, [documentId, documentMetadata]);
+
+  // New useEffect to handle scrolling when pendingScrollOffset changes or content loads
+  useEffect(() => {
+    console.log(`[DocumentViewer ScrollEffect] Evaluating. Pending: ${pendingScrollOffset}, ContentLoaded: ${!!fullDocumentContent}, IsLoading: ${isContentLoading}`);
+    if (pendingScrollOffset !== null && fullDocumentContent && !isContentLoading) {
+      console.log(`[DocumentViewer ScrollEffect] Conditions met. Pending offset: ${pendingScrollOffset}.`);
+      const offsetToScroll = pendingScrollOffset;
+      setPendingScrollOffset(null); // Clear immediately
+
+      console.log(`[DocumentViewer ScrollEffect] Cleared pendingScrollOffset. Scheduling scroll to ${offsetToScroll} in 100ms.`);
+
+      setTimeout(() => {
+        console.log(`[DocumentViewer ScrollEffect setTimeout] Fired for offset ${offsetToScroll}.`);
+        if (contentRef.current) {
+          console.log(`[DocumentViewer ScrollEffect setTimeout] contentRef.current exists. Calling scrollToOffset.`);
+          // In full content view, local offset is the same as global offset
+          scrollToOffset(offsetToScroll, offsetToScroll);
+        } else {
+          console.warn(`[DocumentViewer ScrollEffect setTimeout] contentRef.current is NULL. Cannot scroll to offset ${offsetToScroll}.`);
+        }
+      }, 100); // 100ms delay
+    } else {
+      if (pendingScrollOffset !== null) {
+          if (!fullDocumentContent) console.log(`[DocumentViewer ScrollEffect] Condition not met: fullDocumentContent is falsy.`);
+          if (isContentLoading) console.log(`[DocumentViewer ScrollEffect] Condition not met: isContentLoading is true.`);
+      }
+    }
+  }, [pendingScrollOffset, fullDocumentContent, isContentLoading]);
 
 
   // Reset current page to 1 when documentId changes // This whole useEffect can be removed if setCurrentPage was its only job.
@@ -296,30 +295,17 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   }, [contextMenu]); // Re-run this effect when the contextMenu state changes.
 
   useEffect(() => {
-    const eventHandler = (event: CustomEvent) => { // Renamed to eventHandler to avoid confusion with the outer scope function name
+    const eventHandler = (event: CustomEvent) => {
       const { startOffset: globalStartOffsetFromEvent } = event.detail;
       console.log(`[DocumentViewer] Received 'jumpToAnnotation' window event. Global startOffset: ${globalStartOffsetFromEvent}`);
 
-      if (!documentMetadata) {
-        console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot jump.");
+      if (!documentMetadata) { // Keep this guard
+        console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot process jump.");
         return;
       }
-      // It's okay if fullDocumentContent is not yet available,
-      // as pendingScrollOffset logic will handle scrolling after content load.
-
-      console.log(`[DocumentViewer handleJumpToAnnotation] Called with globalStartOffset: ${globalStartOffsetFromEvent}`);
-      // const targetPage = Math.floor(globalStartOffsetFromEvent / DEFAULT_CHUNK_SIZE) + 1; // No pages
-      // const localOffsetForScroll = globalStartOffsetFromEvent % DEFAULT_CHUNK_SIZE; // No local offset in this context
-
-      // If full content isn't loaded yet, set pending scroll. Otherwise, scroll immediately.
-      if (!fullDocumentContent) {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Full content not loaded. Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
-        setPendingScrollOffset(globalStartOffsetFromEvent);
-      } else {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Full content loaded. Calling scrollToOffset directly.`);
-        // For full content, localOffsetToScroll is the same as globalStartOffsetFromEvent
-        scrollToOffset(globalStartOffsetFromEvent, globalStartOffsetFromEvent);
-      }
+      // ALWAYS set pendingScrollOffset. The new dedicated effect will handle the rest.
+      console.log(`[DocumentViewer handleJumpToAnnotation] Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
+      setPendingScrollOffset(globalStartOffsetFromEvent);
     };
 
     console.log("[DocumentViewer] Adding 'jumpToAnnotation' window event listener.");
@@ -328,8 +314,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       console.log("[DocumentViewer] Removing 'jumpToAnnotation' window event listener.");
       window.removeEventListener('jumpToAnnotation', eventHandler as EventListener);
     };
-    // documentMetadata is used. fullDocumentContent is used to decide immediate scroll vs pending.
-  }, [documentMetadata, fullDocumentContent]);
+  }, [documentMetadata]); // Dependency only on documentMetadata
 
   if (!documentId) {
     return (
