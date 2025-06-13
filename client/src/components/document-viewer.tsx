@@ -56,10 +56,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     queryFn: async () => {
       if (!documentId) return null;
       const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}`);
-      console.log("DocumentViewer: Raw response for document METADATA, documentId:", documentId, response);
+      // console.log("DocumentViewer: Raw response for document METADATA, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch document metadata");
       const metadata = await response.json();
-      console.log("DocumentViewer: Parsed document METADATA for documentId:", documentId, metadata);
+      // console.log("DocumentViewer: Parsed document METADATA for documentId:", documentId, metadata);
       // Since content is now chunked, metadata.content might be null or a preview.
       // We rely on totalPages from metadata.
       return metadata;
@@ -74,10 +74,10 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     queryFn: async () => {
       if (!documentId) return [];
       const response = await fetch(`${import.meta.env.BASE_URL}api/documents/${documentId}/annotations`);
-      console.log("DocumentViewer: Raw response for annotations, documentId:", documentId, response);
+      // console.log("DocumentViewer: Raw response for annotations, documentId:", documentId, response);
       if (!response.ok) throw new Error("Failed to fetch annotations");
       const annotationsData = await response.json();
-      console.log("DocumentViewer: Parsed annotations for documentId:", documentId, annotationsData);
+      // console.log("DocumentViewer: Parsed annotations for documentId:", documentId, annotationsData);
       return annotationsData;
     },
     enabled: !!documentId,
@@ -93,61 +93,60 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
   useEffect(() => {
     if (documentId && documentMetadata) {
       setIsContentLoading(true);
-      setFullDocumentContent(null);
+      setFullDocumentContent(null); // Reset content when documentId or metadata changes
       console.log(`DocumentViewer: Fetching full content for document ${documentId}`);
       getSECDocumentFullContent(documentId)
         .then(content => {
           if (content !== null) {
             console.log(`DocumentViewer: Received full content. Length: ${content.length}`);
             setFullDocumentContent(content);
-            // If there's a pending scroll, execute it now that content is loaded
-            // With full content, any pending scroll can be attempted directly.
-            if (pendingScrollOffset !== null) {
-                console.log(`[DocumentViewer pendingScrollEffect] Full content loaded. Attempting scroll for pending offset ${pendingScrollOffset}.`);
-                // The concept of "localOffsetToScroll" becomes the global offset itself in full content view
-                const offsetToScrollTo = pendingScrollOffset;
-
-                requestAnimationFrame(() => {
-                  requestAnimationFrame(() => { // Double rAF
-                    console.log(`[DocumentViewer pendingScrollEffect] rAF: Executing for global offset ${pendingScrollOffset}.`);
-                    if (pendingScrollOffset !== null) { // Re-check as state might have changed
-                      if (contentRef.current) {
-                        console.log(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is available.`);
-                        const element = contentRef.current.querySelector(`[data-annotation-start="${pendingScrollOffset}"]`) as HTMLElement;
-                        if (element) {
-                          console.log(`[DocumentViewer pendingScrollEffect] rAF: querySelector FOUND element:`, element);
-                        } else {
-                          console.warn(`[DocumentViewer pendingScrollEffect] rAF: querySelector DID NOT FIND element for offset ${pendingScrollOffset}.`);
-                        }
-                      } else {
-                        console.warn(`[DocumentViewer pendingScrollEffect] rAF: contentRef.current is NULL at time of query.`);
-                      }
-                      scrollToOffset(offsetToScrollTo, offsetToScrollTo);
-                    } else {
-                      console.log(`[DocumentViewer pendingScrollEffect] rAF: pendingScrollOffset became null before scrollToOffset call.`);
-                    }
-                    setPendingScrollOffset(null); // Clear pending offset
-                  });
-                });
-            }
+            // Scroll logic is now handled by the new dedicated effect
           } else {
             console.warn(`DocumentViewer: No full content received for document ${documentId}.`);
             setFullDocumentContent(null);
-            setPendingScrollOffset(null); // Clear pending scroll if content load failed
+            // setPendingScrollOffset(null); // Pending scroll should persist if content load fails, new effect will not trigger
           }
         })
         .catch(error => {
           console.error(`DocumentViewer: Error fetching full content for document ${documentId}:`, error);
           setFullDocumentContent(null);
-          setPendingScrollOffset(null); // Clear pending scroll if content load failed
+          // setPendingScrollOffset(null); // Pending scroll should persist if content load fails
         })
         .finally(() => {
           setIsContentLoading(false);
         });
     }
-  // Removed currentPage from dependencies, documentMetadata is used as a trigger.
-  // pendingScrollOffset is kept to re-run if it changes while content is already loaded.
-  }, [documentId, documentMetadata, pendingScrollOffset]);
+  // Only re-run if documentId or documentMetadata changes.
+  // pendingScrollOffset is removed as a dependency here.
+  }, [documentId, documentMetadata]);
+
+  // New useEffect to handle scrolling when pendingScrollOffset changes or content loads
+  useEffect(() => {
+    // console.log(`[DocumentViewer ScrollEffect] Evaluating. Pending: ${pendingScrollOffset}, ContentLoaded: ${!!fullDocumentContent}, IsLoading: ${isContentLoading}`);
+    if (pendingScrollOffset !== null && fullDocumentContent && !isContentLoading) {
+      // console.log(`[DocumentViewer ScrollEffect] Conditions met. Pending offset: ${pendingScrollOffset}.`);
+      const offsetToScroll = pendingScrollOffset;
+      setPendingScrollOffset(null); // Clear immediately
+
+      // console.log(`[DocumentViewer ScrollEffect] Cleared pendingScrollOffset. Scheduling scroll to ${offsetToScroll} in 100ms.`);
+
+      setTimeout(() => {
+        // console.log(`[DocumentViewer ScrollEffect setTimeout] Fired for offset ${offsetToScroll}.`);
+        if (contentRef.current) {
+          // console.log(`[DocumentViewer ScrollEffect setTimeout] contentRef.current exists. Calling scrollToOffset.`);
+          // In full content view, local offset is the same as global offset
+          scrollToOffset(offsetToScroll, offsetToScroll);
+        } else {
+          console.warn(`[DocumentViewer ScrollEffect setTimeout] contentRef.current is NULL. Cannot scroll to offset ${offsetToScroll}.`);
+        }
+      }, 100); // 100ms delay
+    } else {
+      // if (pendingScrollOffset !== null) {
+      //     if (!fullDocumentContent) console.log(`[DocumentViewer ScrollEffect] Condition not met: fullDocumentContent is falsy.`);
+      //     if (isContentLoading) console.log(`[DocumentViewer ScrollEffect] Condition not met: isContentLoading is true.`);
+      // }
+    }
+  }, [pendingScrollOffset, fullDocumentContent, isContentLoading]);
 
 
   // Reset current page to 1 when documentId changes // This whole useEffect can be removed if setCurrentPage was its only job.
@@ -163,14 +162,14 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
   useEffect(() => {
     if (contentRef.current && fullDocumentContent) {
-      console.log("[DocumentViewer] Running setupTextSelection effect. Has fullDocumentContent:", !!fullDocumentContent);
+      // console.log("[DocumentViewer] Running setupTextSelection effect. Has fullDocumentContent:", !!fullDocumentContent);
       // const currentPageGlobalStartOffset = (currentPage - 1) * DEFAULT_CHUNK_SIZE; // Removed
       const cleanup = setupTextSelection(contentRef.current, (text: string, startOffset: number, endOffset: number, event: MouseEvent) => {
         // Log inside the callback
-        console.log("[DocumentViewer] Text selection callback triggered!");
-        console.log("[DocumentViewer] Selected text:", text.substring(0, 100) + (text.length > 100 ? "..." : ""));
-        console.log("[DocumentViewer] Local offsets (start/end):", startOffset, "/", endOffset);
-        console.log("[DocumentViewer] Mouse event (clientX/clientY):", event.clientX, "/", event.clientY);
+        // console.log("[DocumentViewer] Text selection callback triggered!");
+        // console.log("[DocumentViewer] Selected text:", text.substring(0, 100) + (text.length > 100 ? "..." : ""));
+        // console.log("[DocumentViewer] Local offsets (start/end):", startOffset, "/", endOffset);
+        // console.log("[DocumentViewer] Mouse event (clientX/clientY):", event.clientX, "/", event.clientY);
 
         // With full document content, local offsets are global offsets
         const globalStartOffset = startOffset;
@@ -186,58 +185,58 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       });
 
       return () => {
-        console.log("[DocumentViewer] Cleanup setupTextSelection effect.");
+        // console.log("[DocumentViewer] Cleanup setupTextSelection effect.");
         cleanup();
       };
     } else {
-      console.log("[DocumentViewer] setupTextSelection effect: contentRef.current is null or no fullDocumentContent.");
+      // console.log("[DocumentViewer] setupTextSelection effect: contentRef.current is null or no fullDocumentContent.");
     }
   }, [fullDocumentContent]); // Removed currentPage
 
   // Log contextMenu state changes
   useEffect(() => {
-    console.log("[DocumentViewer] contextMenu state changed:", contextMenu);
+    // console.log("[DocumentViewer] contextMenu state changed:", contextMenu);
   }, [contextMenu]);
 
   // Helper function for scrolling to an offset
   const scrollToOffset = (globalStartOffset: number, localOffsetToScroll: number) => {
-    console.log(`[DocumentViewer scrollToOffset] Called with globalStartOffset: ${globalStartOffset}, localOffsetToScroll: ${localOffsetToScroll}`);
+    // console.log(`[DocumentViewer scrollToOffset] Called with globalStartOffset: ${globalStartOffset}, localOffsetToScroll: ${localOffsetToScroll}`);
     if (contentRef.current) {
       const annotationElement = contentRef.current.querySelector(`[data-annotation-start="${globalStartOffset}"]`) as HTMLElement;
       if (annotationElement) {
-        console.log(`[DocumentViewer scrollToOffset] Annotation element found for globalStartOffset ${globalStartOffset}:`, annotationElement);
+        // console.log(`[DocumentViewer scrollToOffset] Annotation element found for globalStartOffset ${globalStartOffset}:`, annotationElement);
 
         const scrollContainer = contentRef.current.closest('.overflow-y-auto') as HTMLElement | null;
 
         // ---- NEW DETAILED LOGGING START ----
         if (scrollContainer) {
-          console.log("[DocumentViewer scrollToOffset] Scroll container found:", scrollContainer);
+          // console.log("[DocumentViewer scrollToOffset] Scroll container found:", scrollContainer);
           const containerRect = scrollContainer.getBoundingClientRect();
           const elementRect = annotationElement.getBoundingClientRect();
-          console.log("[DocumentViewer scrollToOffset] ContainerRect:", JSON.stringify(containerRect));
-          console.log("[DocumentViewer scrollToOffset] ElementRect:", JSON.stringify(elementRect));
+          // console.log("[DocumentViewer scrollToOffset] ContainerRect:", JSON.stringify(containerRect));
+          // console.log("[DocumentViewer scrollToOffset] ElementRect:", JSON.stringify(elementRect));
 
           const scrollTopValue = elementRect.top - containerRect.top + scrollContainer.scrollTop - 20; // 20px offset
-          console.log(`[DocumentViewer scrollToOffset] Calculated scrollTopValue: ${scrollTopValue}`);
+          // console.log(`[DocumentViewer scrollToOffset] Calculated scrollTopValue: ${scrollTopValue}`);
 
-          const scrollTopBefore = scrollContainer.scrollTop;
-          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop BEFORE: ${scrollTopBefore}`);
+          // const scrollTopBefore = scrollContainer.scrollTop;
+          // console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop BEFORE: ${scrollTopBefore}`);
 
           scrollContainer.scrollTo({
             top: scrollTopValue,
             behavior: 'auto' // Changed from 'smooth'
           });
 
-          const scrollTopAfter = scrollContainer.scrollTop;
-          console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop IMMEDIATELY AFTER attempting scrollTo: ${scrollTopAfter}`);
+          // const scrollTopAfter = scrollContainer.scrollTop;
+          // console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop IMMEDIATELY AFTER attempting scrollTo: ${scrollTopAfter}`);
 
-          setTimeout(() => {
-            const scrollTopAfterDelay = scrollContainer.scrollTop;
-            console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop AFTER 100ms DELAY: ${scrollTopAfterDelay}`);
-            if (scrollTopAfterDelay !== scrollTopAfter) {
-              console.log(`[DocumentViewer scrollToOffset] scrollTop changed after delay. Initial attempt: ${scrollTopAfter}, After delay: ${scrollTopAfterDelay}`);
-            }
-          }, 100);
+          // setTimeout(() => {
+          //   const scrollTopAfterDelay = scrollContainer.scrollTop;
+          //   console.log(`[DocumentViewer scrollToOffset] scrollContainer.scrollTop AFTER 100ms DELAY: ${scrollTopAfterDelay}`);
+          //   if (scrollTopAfterDelay !== scrollTopAfter) {
+          //     console.log(`[DocumentViewer scrollToOffset] scrollTop changed after delay. Initial attempt: ${scrollTopAfter}, After delay: ${scrollTopAfterDelay}`);
+          //   }
+          // }, 100);
 
         } else {
           console.warn("[DocumentViewer scrollToOffset] Scroll container (.overflow-y-auto) not found. Using fallback scrollIntoView.");
@@ -271,17 +270,17 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     const handleClickOutside = (event: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
         // Clicked outside the context menu
-        console.log("[DocumentViewer] handleClickOutside: Clicked outside, closing context menu.");
+        // console.log("[DocumentViewer] handleClickOutside: Clicked outside, closing context menu.");
         setContextMenu(null);
       } else {
         // Clicked inside the context menu or on the menu itself, do nothing.
-        console.log("[DocumentViewer] handleClickOutside: Clicked inside or on context menu, not closing.");
+        // console.log("[DocumentViewer] handleClickOutside: Clicked inside or on context menu, not closing.");
       }
     };
 
     // Add listener if menu is open, remove if menu is closed or on cleanup.
     if (contextMenu) {
-      console.log("[DocumentViewer] Adding mousedown listener for handleClickOutside.");
+      // console.log("[DocumentViewer] Adding mousedown listener for handleClickOutside.");
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       // Ensure listener is removed if contextMenu becomes null (e.g. by explicit cancel)
@@ -290,46 +289,32 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     }
 
     return () => {
-      console.log("[DocumentViewer] Cleanup: Removing mousedown listener for handleClickOutside.");
+      // console.log("[DocumentViewer] Cleanup: Removing mousedown listener for handleClickOutside.");
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [contextMenu]); // Re-run this effect when the contextMenu state changes.
 
   useEffect(() => {
-    const eventHandler = (event: CustomEvent) => { // Renamed to eventHandler to avoid confusion with the outer scope function name
+    const eventHandler = (event: CustomEvent) => {
       const { startOffset: globalStartOffsetFromEvent } = event.detail;
-      console.log(`[DocumentViewer] Received 'jumpToAnnotation' window event. Global startOffset: ${globalStartOffsetFromEvent}`);
+      // console.log(`[DocumentViewer] Received 'jumpToAnnotation' window event. Global startOffset: ${globalStartOffsetFromEvent}`);
 
-      if (!documentMetadata) {
-        console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot jump.");
+      if (!documentMetadata) { // Keep this guard
+        console.warn("[DocumentViewer jumpToAnnotation event] documentMetadata not available, cannot process jump.");
         return;
       }
-      // It's okay if fullDocumentContent is not yet available,
-      // as pendingScrollOffset logic will handle scrolling after content load.
-
-      console.log(`[DocumentViewer handleJumpToAnnotation] Called with globalStartOffset: ${globalStartOffsetFromEvent}`);
-      // const targetPage = Math.floor(globalStartOffsetFromEvent / DEFAULT_CHUNK_SIZE) + 1; // No pages
-      // const localOffsetForScroll = globalStartOffsetFromEvent % DEFAULT_CHUNK_SIZE; // No local offset in this context
-
-      // If full content isn't loaded yet, set pending scroll. Otherwise, scroll immediately.
-      if (!fullDocumentContent) {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Full content not loaded. Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
-        setPendingScrollOffset(globalStartOffsetFromEvent);
-      } else {
-        console.log(`[DocumentViewer handleJumpToAnnotation] Full content loaded. Calling scrollToOffset directly.`);
-        // For full content, localOffsetToScroll is the same as globalStartOffsetFromEvent
-        scrollToOffset(globalStartOffsetFromEvent, globalStartOffsetFromEvent);
-      }
+      // ALWAYS set pendingScrollOffset. The new dedicated effect will handle the rest.
+      // console.log(`[DocumentViewer handleJumpToAnnotation] Setting pendingScrollOffset to: ${globalStartOffsetFromEvent}`);
+      setPendingScrollOffset(globalStartOffsetFromEvent);
     };
 
-    console.log("[DocumentViewer] Adding 'jumpToAnnotation' window event listener.");
+    // console.log("[DocumentViewer] Adding 'jumpToAnnotation' window event listener.");
     window.addEventListener('jumpToAnnotation', eventHandler as EventListener);
     return () => {
-      console.log("[DocumentViewer] Removing 'jumpToAnnotation' window event listener.");
+      // console.log("[DocumentViewer] Removing 'jumpToAnnotation' window event listener.");
       window.removeEventListener('jumpToAnnotation', eventHandler as EventListener);
     };
-    // documentMetadata is used. fullDocumentContent is used to decide immediate scroll vs pending.
-  }, [documentMetadata, fullDocumentContent]);
+  }, [documentMetadata]); // Dependency only on documentMetadata
 
   if (!documentId) {
     return (
@@ -430,7 +415,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
       // If textLength is 0, currentGlobalOffset does not change for this empty node.
     }
 
-    console.log(`[highlightText] Collected ${allTextNodesInfo.length} text nodes.`);
+    // console.log(`[highlightText] Collected ${allTextNodesInfo.length} text nodes.`);
 
     // Ensure annotations are sorted by startOffset, then by endOffset descending (longest first for overlaps)
     const sortedAnnotations = [...annotations].sort((a, b) => {
@@ -448,7 +433,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
       // Optimization: If all annotations have been processed, stop iterating text nodes for highlighting.
       if (annotationIndex >= sortedAnnotations.length) {
-          console.log("[highlightText] All annotations processed. Breaking from text node loop.");
+          // console.log("[highlightText] All annotations processed. Breaking from text node loop.");
           break;
       }
 
@@ -466,13 +451,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
         // If annotation starts after current node ends, move to next text node
         if (currentAnnotation.startOffset >= nodeEnd) {
-          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (start: ${currentAnnotation.startOffset}) starts after current node (ends: ${nodeEnd}). Breaking for this node.`);
+          // console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (start: ${currentAnnotation.startOffset}) starts after current node (ends: ${nodeEnd}). Breaking for this node.`);
           break;
         }
 
         // If annotation ends before current node starts, it's fully processed or irrelevant to this and subsequent nodes.
         if (currentAnnotation.endOffset <= nodeStart) {
-          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) ends before current node (starts: ${nodeStart}). Incrementing annotationIndex.`);
+          // console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) ends before current node (starts: ${nodeStart}). Incrementing annotationIndex.`);
           annotationIndex++;
           continue; // Check next annotation for this same node
         }
@@ -483,13 +468,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
         const highlightEndInNode = Math.min(textNodeInfo.textLength, currentAnnotation.endOffset - nodeStart);
 
         // ADD DETAILED LOGGING HERE
-        console.log(`[Highlight Condition Check] Ann ID: ${currentAnnotation.id}, Type: ${currentAnnotation.type}, AnnOffsets: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}, NodeRange: ${nodeStart}-${nodeEnd} (len: ${textNodeInfo.textLength}), CalcSegment: ${highlightStartInNode}-${highlightEndInNode}`);
+        // console.log(`[Highlight Condition Check] Ann ID: ${currentAnnotation.id}, Type: ${currentAnnotation.type}, AnnOffsets: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}, NodeRange: ${nodeStart}-${nodeEnd} (len: ${textNodeInfo.textLength}), CalcSegment: ${highlightStartInNode}-${highlightEndInNode}`);
 
         if (highlightStartInNode < highlightEndInNode) {
             // This is where the span is created. All annotation types that need a text range
             // (e.g., for scrolling, marker placement) should create a span.
             // Visual styling (like background color) is conditional based on type/color.
-            console.log(`[highlightText] Applying highlight/marker span for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}. Segment: ${highlightStartInNode}-${highlightEndInNode}. Global Ann: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}`);
+            // console.log(`[highlightText] Applying highlight/marker span for Ann ID ${currentAnnotation.id} on node starting at ${nodeStart}. Segment: ${highlightStartInNode}-${highlightEndInNode}. Global Ann: ${currentAnnotation.startOffset}-${currentAnnotation.endOffset}`);
             try {
                 const range = window.document.createRange();
                 range.setStart(currentNode, highlightStartInNode);
@@ -542,13 +527,13 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
 
         // If this annotation is finished within this node, move to the next annotation for this same node.
         if (currentAnnotation.endOffset <= nodeEnd) {
-          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) finishes in this node (ends: ${nodeEnd}). Incrementing annotationIndex.`);
+          // console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) finishes in this node (ends: ${nodeEnd}). Incrementing annotationIndex.`);
           annotationIndex++;
           // continue; // This would re-evaluate the *new* currentAnnotation against the same text node.
         } else {
           // This annotation spans past the current text node.
           // So, for the *next text node*, we'll still be considering *this same annotation*.
-          console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) spans past this node (ends: ${nodeEnd}). Breaking for this node, will re-eval ann on next node.`);
+          // console.log(`[highlightText] Annotation ID ${currentAnnotation.id} (end: ${currentAnnotation.endOffset}) spans past this node (ends: ${nodeEnd}). Breaking for this node, will re-eval ann on next node.`);
           break; // Move to the next text node, current annotation remains the same.
         }
       }
@@ -651,7 +636,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
               onClick={() => {
                 // contextMenu.startOffset and .endOffset are already global due to setupTextSelection modification
-                console.log("[DocumentViewer] Annotate button clicked. Global offsets from contextMenu state:", contextMenu.startOffset, contextMenu.endOffset);
+                // console.log("[DocumentViewer] Annotate button clicked. Global offsets from contextMenu state:", contextMenu.startOffset, contextMenu.endOffset);
                 onTextSelection(contextMenu.selectedText, contextMenu.startOffset, contextMenu.endOffset);
                 setContextMenu(null); // Close menu after action
               }}
@@ -661,7 +646,7 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
             <button
               className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center space-x-2"
               onClick={() => {
-                console.log("[DocumentViewer] Cancel button clicked for context menu.");
+                // console.log("[DocumentViewer] Cancel button clicked for context menu.");
                 setContextMenu(null);
               }}
             >
