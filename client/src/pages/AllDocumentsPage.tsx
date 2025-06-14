@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/components/ui/use-toast"; // Corrected path based on typical shadcn/ui structure
+import { useToast } from '@/hooks/use-toast'; // Corrected import path
 import { TopToolbar } from '@/components/TopToolbar';
 import { PageContainer } from '@/components/PageContainer';
 
