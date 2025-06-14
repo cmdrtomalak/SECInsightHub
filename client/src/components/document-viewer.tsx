@@ -316,6 +316,49 @@ export default function DocumentViewer({ documentId, onTextSelection }: Document
     };
   }, [documentMetadata]); // Dependency only on documentMetadata
 
+  // Effect to handle internal anchor link clicks
+  useEffect(() => {
+    const contentElement = contentRef.current;
+    if (!contentElement || !fullDocumentContent) {
+      return;
+    }
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const anchorElement = target.closest('a');
+
+      if (anchorElement) {
+        const href = anchorElement.getAttribute('href');
+        if (href && href.startsWith('#')) {
+          // console.log(`[DocumentViewer] Internal anchor link clicked: ${href}`);
+          const id = href.substring(1);
+          if (id) {
+            // Try to find the element within contentRef.current
+            // This is important if IDs are not globally unique on the page but are unique within the document content
+            const targetElement = contentElement.querySelector(`#${id}`) || document.getElementById(id);
+
+            if (targetElement) {
+              // console.log(`[DocumentViewer] Target element found for ID '${id}':`, targetElement);
+              event.preventDefault();
+              targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // No need to set pendingScrollOffset here, as this is a direct client-side scroll.
+            } else {
+              // console.warn(`[DocumentViewer] Target element with ID '${id}' not found within contentRef or document.`);
+            }
+          }
+        }
+      }
+    };
+
+    // console.log("[DocumentViewer] Adding click listener for internal anchor links.");
+    contentElement.addEventListener('click', handleClick);
+
+    return () => {
+      // console.log("[DocumentViewer] Removing click listener for internal anchor links.");
+      contentElement.removeEventListener('click', handleClick);
+    };
+  }, [fullDocumentContent]); // Re-run when fullDocumentContent changes
+
   if (!documentId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-surface">
