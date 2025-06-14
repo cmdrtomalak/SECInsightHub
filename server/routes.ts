@@ -67,6 +67,33 @@ export async function registerRoutes(router: Router): Promise<void> {
     }
   });
 
+  router.delete("/api/documents/:id", async (req, res) => {
+    try {
+      const documentId = parseInt(req.params.id);
+
+      if (isNaN(documentId)) {
+        return res.status(400).json({ error: "Invalid document ID format." });
+      }
+
+      // It's important to consider what happens if the document doesn't exist.
+      // The current storage.deleteDocument will not throw an error if no rows are affected.
+      // If we need to ensure the document existed and return a 404,
+      // we might need to fetch it first or check deletion counts (if the DB driver supports it easily).
+      // For now, we'll assume that attempting to delete a non-existent document is not an error condition,
+      // or that the foreign key constraints would implicitly handle cascading deletes correctly if set up.
+      // The current requirement is to delete records, which this will do (or do nothing if no match).
+      await storage.deleteDocument(documentId);
+
+      // Successfully deleted (or document didn't exist, which is fine for a DELETE op)
+      res.status(204).send(); // 204 No Content is typical for successful DELETE
+
+    } catch (error) {
+      console.error(`Error deleting document with ID ${req.params.id}:`, error);
+      // Generic error for server-side issues
+      res.status(500).json({ error: "Failed to delete document." });
+    }
+  });
+
   router.get("/api/companies/:cik", async (req, res) => {
     try {
       const { cik } = req.params;
@@ -95,6 +122,19 @@ export async function registerRoutes(router: Router): Promise<void> {
   });
 
   // Document routes
+
+  router.get("/api/documents/all", async (req, res) => {
+    try {
+      const { q } = req.query;
+      // Ensure q is a string if provided, otherwise undefined
+      const searchQuery = typeof q === 'string' ? q : undefined;
+      const documents = await storage.getAllDocuments(searchQuery);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching all documents:", error);
+      res.status(500).json({ error: "Failed to fetch all documents" });
+    }
+  });
 
   // New endpoint to get the full content of a document
   router.get("/api/documents/:documentId/full-content", async (req, res) => {

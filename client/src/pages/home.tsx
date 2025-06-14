@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter"; // Added useLocation
+import { useParams, useLocation, Link } from "wouter"; // Added useLocation and Link
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Annotation } from "@shared/schema";
 import CompanySearch from "@/components/company-search";
@@ -334,6 +334,16 @@ export default function Home() {
             {/* Recent Documents */}
             <div className="p-4 border-b border-border">
               <RecentDocuments onDocumentSelect={handleDocumentSelect} />
+            </div>
+
+            {/* All Documents Link */}
+            <div className="p-4 border-b border-border">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Browse</h3>
+              <Link href="/all-documents">
+                <Button variant="link" className="p-0 h-auto text-primary hover:underline">
+                  All Documents
+                </Button>
+              </Link>
             </div>
 
             {/* Annotation Search */}

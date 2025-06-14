@@ -23,6 +23,8 @@ export interface IStorage {
   getDocumentChunk(documentId: number, pageNumber: number): Promise<DocumentChunk | undefined>;
   getCompanyDocuments(companyId: number): Promise<Document[]>;
   getFullDocumentContent(documentId: number): Promise<string | null>;
+  getAllDocuments(query?: string): Promise<Document[]>;
+  deleteDocument(documentId: number): Promise<void>;
 
   // Annotation methods
   getDocumentAnnotations(documentId: number): Promise<Annotation[]>;
@@ -263,6 +265,35 @@ export class DatabaseStorage implements IStorage {
     console.log("[Storage searchAnnotations] Number of results from DB:", results.length); // Log number of results
 
     return results;
+  }
+
+  async getAllDocuments(query?: string): Promise<Document[]> {
+    let dbQuery = db.select().from(documents);
+
+    if (query) {
+      // Use ilike for case-insensitive search, if available and part of drizzle-orm imports
+      // Assuming 'ilike' is imported from 'drizzle-orm' like 'like', 'eq', etc.
+      // If 'ilike' is not directly available or needs specific SQL function, adjust accordingly.
+      // For PostgreSQL, ilike is standard. For other DBs, lower(column) like lower(pattern) might be needed.
+      // Let's assume 'ilike' is available and works as expected.
+      dbQuery = dbQuery.where(ilike(documents.title, `%${query}%`));
+    }
+
+    return await dbQuery.orderBy(desc(documents.filingDate)); // Added ordering for consistency
+  }
+
+  async deleteDocument(documentId: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      // First, delete associated annotations
+      await tx.delete(annotations).where(eq(annotations.documentId, documentId));
+      // Then, delete associated document chunks
+      await tx.delete(documentChunks).where(eq(documentChunks.documentId, documentId));
+      // Finally, delete the document itself
+      await tx.delete(documents).where(eq(documents.id, documentId));
+    });
+    // If the transaction fails, Drizzle will automatically roll it back.
+    // If it succeeds, it will be committed.
+    // No explicit return value is needed for void Promise.
   }
 }
 
