@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast'; // Corrected import path
-import { TopToolbar } from '@/components/TopToolbar';
+import { TopToolbar } from '@/components/top-toolbar'; // Corrected import path casing
 import { PageContainer } from '@/components/PageContainer';
 
 // Simple debounce hook
